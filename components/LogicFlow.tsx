@@ -53,7 +53,7 @@ function FlowNode({ step }: { step: FlowStep }) {
           </div>
         )}
         {step.branchYes && step.branchYes.length > 0 && (
-          <div className="mt-3 grid grid-cols-2 gap-3 pl-7">
+          <div className="mt-3 space-y-2 pl-7">
             <Branch label="if true" steps={step.branchYes} className="border-emerald-300 bg-emerald-50/40" />
             <Branch label="else" steps={step.branchNo ?? []} className="border-rose-300 bg-rose-50/40" />
           </div>
