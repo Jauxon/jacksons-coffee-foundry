@@ -47,7 +47,7 @@ export function WelcomeModal() {
             <em>Volume Maximizing</em>.
           </p>
           <p>
-            Forward Deployed Cafe has an agent that recommends changes in price, restock orders, etc. — but the
+            Forward Deployed Cafe has an agent that recommends changes in price, restock orders, etc. but the
             control lies in your fingertips. The other tabs represent other features in the Foundry suite.
           </p>
           <p className="text-coffee-800 font-medium pt-1">Get to roasting.</p>
