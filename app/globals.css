@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #F4F1EA;
+  --foundry-grid: #E8E2D0;
+}
+
+html, body {
+  background: #FAF7EF;
+  color: #1F2937;
+}
+
+/* Foundry-ish data table */
+.foundry-table {
+  @apply w-full text-[13px] border-collapse;
+}
+.foundry-table th {
+  /* Don't set a default text-align here — it would beat per-element `text-right`
+     classes on numeric columns due to CSS specificity. Browser default (start)
+     handles the left case. */
+  @apply font-medium text-slate-600 px-3 py-2 border-b border-slate-200 bg-slate-50;
+}
+.foundry-table td {
+  @apply px-3 py-2 border-b border-slate-100;
+}
+.foundry-table tr:hover td {
+  @apply bg-slate-50;
+}
+
+/* Status pill */
+.pill {
+  @apply inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-medium;
+}
+.pill-green { @apply bg-emerald-100 text-emerald-800; }
+.pill-red   { @apply bg-rose-100 text-rose-800; }
+.pill-amber { @apply bg-amber-100 text-amber-800; }
+.pill-slate { @apply bg-slate-200 text-slate-700; }
+
+/* Leaflet map container */
+.leaflet-container { background: #DFE9F0 !important; font-family: inherit !important; }

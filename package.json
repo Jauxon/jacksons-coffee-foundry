@@ -1,0 +1,42 @@
+{
+  "name": "coffee-cup",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx db/migrate.ts",
+    "db:seed": "tsx db/seed-cli.ts",
+    "db:reset": "rm -f data.db && npm run db:migrate && npm run db:seed",
+    "tick": "tsx scripts/tick.ts",
+    "agent": "tsx scripts/agent.ts",
+    "db:studio": "drizzle-kit studio",
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.95.1",
+    "better-sqlite3": "^11.5.0",
+    "dotenv": "^17.4.2",
+    "drizzle-orm": "^0.36.4",
+    "leaflet": "^1.9.4",
+    "next": "^16.2.6",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "react-leaflet": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/leaflet": "^1.9.21",
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "autoprefixer": "^10.5.0",
+    "drizzle-kit": "^0.30.0",
+    "postcss": "^8.5.14",
+    "tailwindcss": "^3.4.19",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

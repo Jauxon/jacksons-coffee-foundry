@@ -1,0 +1,1 @@
+ALTER TABLE `customer_order` ADD `stockout_ingredient_id` integer REFERENCES ingredient(id);
