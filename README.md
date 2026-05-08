@@ -1,6 +1,6 @@
-# Coffee Cup
+# Jackson's Coffee Foundry
 
-A simulated multi-team coffee-shop competition on Times Square — built as a recruiting demo for Palantir's Forward Deployed Engineer role. It mirrors the AIP Coffee Cup hackathon: five storefronts, four AI strategies + one human operator, all driven by the same ontology of products, vendors, inventory, customers, and emails.
+A simulated multi-team coffee-shop competition on Times Square — built as a recruiting demo for Palantir's Forward Deployed Engineer role. Inspired by The Palantir Coffee Cup hackathon: five storefronts, four AI strategies + one human operator, all driven by the same ontology of products, vendors, inventory, customers, and emails.
 
 The simulation runs day-by-day in 6-hour segments. Customer arrivals are calibrated to Times Square pedestrian counts (~330k/day). Each tick advances the world; each agent fires Logic Functions that read the ontology and propose actions; you (or auto-approve) decide what executes.
 
@@ -55,6 +55,8 @@ Every tick, the world advances and the heuristic reorder + pricing agents auto-f
 
 The LLM agent (Claude Opus 4.7) is opt-in per team. It reads the same ontology snapshot but reasons about cross-ingredient tradeoffs, vendor reliability vs. cost, perishable risk, and cash runway — and composes the vendor email body. Strategy variants change the system prompt: aggressive_stocker overrides the 7-day target with 10 days, lean_operator caps at 3 days, premium_pricer always picks the most-reliable vendor regardless of price, etc.
 
+The deployed demo enforces a 3-call LLM budget per server instance to protect API credits — heuristic agents stay available indefinitely.
+
 ## Run locally
 
 Requires Node 22+. Anthropic API key optional — falls back to the heuristic agent if `ANTHROPIC_API_KEY` is unset.
@@ -77,19 +79,18 @@ npm run agent --all          # fire LLM agent for every AI team
 npm run db:reset             # wipe + reseed
 ```
 
-## Deploy to Vercel
+## Deploy to Railway
 
-The app uses an in-memory SQLite in production (auto-seeded on cold start) so it deploys to Vercel without a database service.
+The live demo runs on Railway with a persistent volume so state survives restarts and visitors share the same world. Cold start runs migrations and only seeds if the DB is empty.
 
-```sh
-npm i -g vercel
-vercel login
-vercel                       # follow prompts; pick "Other" framework if asked
-vercel env add ANTHROPIC_API_KEY  # paste your key when prompted
-vercel --prod                # promote to production
-```
+1. Create a Railway project from the GitHub repo.
+2. Attach a volume mounted at `/data`.
+3. Set env vars:
+   - `DB_PATH=/data/coffee.db`
+   - `ANTHROPIC_API_KEY=sk-ant-...` (optional — heuristic agent works without it)
+4. Deploy. Railway autodetects Next.js and runs `npm run build` + `npm start`.
 
-State resets every cold start, which is fine for a demo — every visitor gets a fresh Day 1.
+`db/client.ts` falls back to `:memory:` if it can't open the configured file, so the app still boots if the volume isn't attached yet — useful while wiring things up.
 
 ## Tour
 
@@ -112,9 +113,9 @@ State resets every cold start, which is fine for a demo — every visitor gets a
 
 - **Next.js 16** (App Router, server components, server actions)
 - **TypeScript**, **Tailwind**, **Drizzle ORM** + **better-sqlite3**
-- **Anthropic SDK** with prompt caching + adaptive thinking + tool-use forcing
+- **Anthropic SDK** with prompt caching + adaptive thinking + tool use
 - **Leaflet** + OpenStreetMap for the Times Square map
-- All charts and the ontology graph are hand-rolled SVG — no chart library dependency
+- Charts and the ontology graph are hand-rolled — bar/stacked charts in HTML/CSS, time series + ontology graph in SVG. No chart library dependency.
 
 ## Project structure
 
