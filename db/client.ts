@@ -1,17 +1,26 @@
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
+import fs from "node:fs";
 import path from "node:path";
 import * as schema from "./schema.ts";
 import { seedDatabase } from "./seed.ts";
 
 // Database path resolution:
-//   1. DB_PATH (e.g. "/data/data.db" on Railway with a persistent volume) — wins.
+//   1. DB_PATH (e.g. "/data/data.db" on Railway with a persistent volume) — wins at runtime.
 //   2. In production with no DB_PATH → in-memory (auto-seeded on cold start).
 //   3. In dev → ./data.db (file in cwd).
+//   4. During Next.js build → :memory: regardless of DB_PATH (volume isn't mounted at build).
 const isProd = process.env.NODE_ENV === "production";
 const isBuildPhase = process.env.NEXT_PHASE === "phase-production-build";
-const dbPath = process.env.DB_PATH ?? (isProd ? ":memory:" : "./data.db");
+const dbPath = isBuildPhase
+  ? ":memory:"
+  : (process.env.DB_PATH ?? (isProd ? ":memory:" : "./data.db"));
+
+// Ensure the parent directory exists when using a real file path.
+if (dbPath !== ":memory:" && !isBuildPhase) {
+  try { fs.mkdirSync(path.dirname(dbPath), { recursive: true }); } catch {}
+}
 
 export const sqlite = new Database(dbPath);
 sqlite.pragma("journal_mode = WAL");
