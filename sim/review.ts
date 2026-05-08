@@ -19,6 +19,7 @@ export interface GeneratedReview {
 const QUICK_WAIT_S = 60;
 const ACCEPTABLE_WAIT_S = 240;
 const PRICEY_CENTS = 500;
+const VERY_PRICEY_CENTS = 800;
 
 const WAIT_PHRASES = {
   quick: ["served in no time", "barely a wait", "quick turnaround"],
@@ -43,17 +44,26 @@ function pick<T>(arr: readonly T[]): T {
 }
 
 export function generateReview(input: ReviewInputs, segment: Segment): GeneratedReview {
-  // Stars: start at 4, penalize wait, modest random quality variance, price tax.
-  let stars = 4;
-  if (input.waitSeconds <= QUICK_WAIT_S) stars += 1;
+  // Stars: base in the middle and pull either direction. Variance is wide on
+  // purpose so averages don't converge at the cap.
+  let stars = 3.5;
+  if (input.waitSeconds <= 30) stars += 1;
+  else if (input.waitSeconds <= QUICK_WAIT_S) stars += 0.5;
   else if (input.waitSeconds > ACCEPTABLE_WAIT_S) stars -= 2;
+  else if (input.waitSeconds > 120) stars -= 0.5;
 
+  // Quality: bidirectional with occasional disasters so 1- and 2-star reviews exist.
   const qualityRoll = Math.random();
-  if (qualityRoll > 0.85) stars += 1;
-  else if (qualityRoll < 0.15) stars -= 1;
+  if (qualityRoll < 0.10) stars -= 2;
+  else if (qualityRoll < 0.30) stars -= 1;
+  else if (qualityRoll > 0.85) stars += 1;
+  else if (qualityRoll > 0.97) stars += 2;
 
-  if (input.priceCents > PRICEY_CENTS && Math.random() < 0.4) stars -= 1;
-  stars = Math.max(1, Math.min(5, stars));
+  // Price tax — fires more often, stacks on truly expensive cups.
+  if (input.priceCents > PRICEY_CENTS && Math.random() < 0.55) stars -= 1;
+  if (input.priceCents > VERY_PRICEY_CENTS && Math.random() < 0.6) stars -= 1;
+
+  stars = Math.max(1, Math.min(5, Math.round(stars)));
 
   const waitBucket =
     input.waitSeconds <= QUICK_WAIT_S ? "quick" :

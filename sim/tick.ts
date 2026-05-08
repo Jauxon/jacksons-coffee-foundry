@@ -195,10 +195,13 @@ function serviceCustomer(
     return;
   }
 
-  // Price gate.
+  // Price gate. Each customer has a willingness-to-pay (~$5–$11 around the
+  // ~$3.50 reference). Acceptance is a steep logistic centered at WTP, so
+  // prices well above WTP crash demand to ~zero — an $80 latte sells nothing.
   const reference = 400 * (1 - 0.4 * customer.priceSensitivity);
-  const priceRatio = wantedProduct.priceCents / reference;
-  const acceptProb = Math.min(1, Math.pow(priceRatio, -2 * customer.priceSensitivity));
+  const wtpCents = reference * (3.5 - 2 * customer.priceSensitivity);
+  const x = wantedProduct.priceCents / wtpCents;
+  const acceptProb = 1 / (1 + Math.exp(8 * (x - 1)));
   if (Math.random() > acceptProb) {
     db.insert(s.customerOrder).values({
       shopId: ctx.shop.id,

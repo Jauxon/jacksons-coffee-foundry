@@ -203,8 +203,6 @@ export function proposeReorders(shopId: number): { proposals: number; decisions:
         // Use downsized qty
         const qty = downsized;
         const totalCents = qty * pick.o.unitPriceCents;
-        const wageRunwayCents = 7 * 4 * 5400 * shop.staffCount;
-        if (shop.cashCents - committedSpendCents - totalCents < wageRunwayCents) continue;
         committedSpendCents += totalCents;
         availableStorage -= qty * ingr.storageWeight;
         const expectedDay = state.day + pick.vendor.leadTimeDays;
@@ -224,11 +222,6 @@ export function proposeReorders(shopId: number): { proposals: number; decisions:
       }
       const qty = moqRounded;
       const totalCents = qty * pick.o.unitPriceCents;
-
-      // Don't blow the bank: leave at least 1 week of wages in cash. Track cumulative
-      // spend so multiple decisions in one call don't collectively over-allocate.
-      const wageRunwayCents = 7 * 4 * 5400 * shop.staffCount;
-      if (shop.cashCents - committedSpendCents - totalCents < wageRunwayCents) continue;
       committedSpendCents += totalCents;
       availableStorage -= wouldUseStorage;
 
@@ -328,10 +321,7 @@ export function approveProposal(proposalId: number): { ok: true; purchaseOrderId
 
     const state = db.select().from(s.simState).where(eq(s.simState.id, 1)).get()!;
     const shop = db.select().from(s.shop).where(eq(s.shop.id, p.shopId)).get()!;
-    if (shop.cashCents < payload.totalCents) {
-      throw new Error(`insufficient cash: have ${shop.cashCents}, need ${payload.totalCents}`);
-    }
-
+    // Cash can go negative — strategies that overspend should crater on purpose.
     const vendor = db.select().from(s.vendor).where(eq(s.vendor.id, payload.vendorId)).get()!;
     const ingr = db.select().from(s.ingredient).where(eq(s.ingredient.id, payload.ingredientId)).get()!;
 

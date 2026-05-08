@@ -394,27 +394,13 @@ export async function proposeReordersWithLLM(shopId: number): Promise<LLMAgentRe
 
   const input = toolUse.input as { summary: string; decisions: LLMDecision[] };
 
-  // Cumulative cash check — the LLM is told about cash management but can still
-  // over-propose. Reserve 1 week of wage runway and persist decisions in the
-  // order the LLM ranked them (most important first), skipping any that breach
-  // the budget. This way you never get an "insufficient cash" error during
-  // approval — the proposals you see can all actually be approved.
-  const wageRunwayCents = 7 * 4 * 5400 * snapshot.staff_count;
-  const cashAvailable = snapshot.cash_cents - wageRunwayCents;
-  let committedCents = 0;
+  // Cash can go negative — strategies that overspend should crater on purpose.
+  // The LLM still sees cash in the snapshot, but we no longer gate persistence
+  // on it. Each strategy plays out its philosophy.
   const persisted: LLMDecision[] = [];
-  const skipped: { decision: LLMDecision; reason: string }[] = [];
 
   for (const d of input.decisions) {
     const total = d.qty * d.expected_unit_price_cents;
-    if (committedCents + total > cashAvailable) {
-      skipped.push({
-        decision: d,
-        reason: `would breach cash + wage runway (need $${(total / 100).toFixed(2)}, ${(cashAvailable - committedCents) / 100} left in budget)`,
-      });
-      continue;
-    }
-    committedCents += total;
     persisted.push(d);
     db.insert(s.agentProposal).values({
       shopId,
@@ -437,15 +423,9 @@ export async function proposeReordersWithLLM(shopId: number): Promise<LLMAgentRe
     }).run();
   }
 
-  if (skipped.length > 0) {
-    console.warn(`[llm-agent shop=${shopId}] skipped ${skipped.length} proposal(s) over cash budget:`, skipped.map((s) => `${s.decision.ingredient_id}: ${s.reason}`));
-  }
-
   return {
     proposals: persisted.length,
-    summary: skipped.length > 0
-      ? `${input.summary}\n\nNote: ${skipped.length} proposal(s) dropped to stay within cash + 1-week wage runway.`
-      : input.summary,
+    summary: input.summary,
     decisions: persisted,
     usage: {
       input_tokens: response.usage.input_tokens,
