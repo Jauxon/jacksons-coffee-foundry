@@ -8,21 +8,31 @@ import { seedDatabase } from "./seed.ts";
 
 // Database path resolution:
 //   1. DB_PATH (e.g. "/data/data.db" on Railway with a persistent volume) — wins at runtime.
-//   2. In production with no DB_PATH → in-memory (auto-seeded on cold start).
+//   2. In production with no DB_PATH → in-memory.
 //   3. In dev → ./data.db (file in cwd).
-//   4. During Next.js build → :memory: regardless of DB_PATH (volume isn't mounted at build).
+// We attempt to open the resolved path and fall back to :memory: if it fails
+// (e.g. during Next.js build the volume isn't mounted yet). This is more
+// robust than relying on NEXT_PHASE which Turbopack workers don't always set.
 const isProd = process.env.NODE_ENV === "production";
 const isBuildPhase = process.env.NEXT_PHASE === "phase-production-build";
-const dbPath = isBuildPhase
-  ? ":memory:"
-  : (process.env.DB_PATH ?? (isProd ? ":memory:" : "./data.db"));
+const requestedDbPath = process.env.DB_PATH ?? (isProd ? ":memory:" : "./data.db");
 
-// Ensure the parent directory exists when using a real file path.
-if (dbPath !== ":memory:" && !isBuildPhase) {
-  try { fs.mkdirSync(path.dirname(dbPath), { recursive: true }); } catch {}
+function openSqlite(p: string): Database.Database {
+  if (p !== ":memory:") {
+    try { fs.mkdirSync(path.dirname(p), { recursive: true }); } catch {}
+  }
+  return new Database(p);
 }
 
-export const sqlite = new Database(dbPath);
+let _sqlite: Database.Database;
+try {
+  _sqlite = openSqlite(requestedDbPath);
+} catch (e) {
+  console.warn(`[db] failed to open '${requestedDbPath}' (${(e as Error).message}); falling back to :memory:`);
+  _sqlite = openSqlite(":memory:");
+}
+export const sqlite = _sqlite;
+const dbPath = sqlite.name; // resolved path (':memory:' or actual file path)
 sqlite.pragma("journal_mode = WAL");
 sqlite.pragma("foreign_keys = ON");
 
