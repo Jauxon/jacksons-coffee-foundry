@@ -6,7 +6,11 @@ import { eq, and, gt, sql, desc } from "drizzle-orm";
 export interface ShopOverview {
   id: number;
   name: string;
+  // Real cash, may be negative. Most UI surfaces should use displayCashCents
+  // (clamped at 0) and isBankrupt instead.
   cashCents: number;
+  displayCashCents: number;
+  isBankrupt: boolean;
   lat: number;
   lng: number;
   staffCount: number;
@@ -72,6 +76,8 @@ function buildOverview(sh: typeof s.shop.$inferSelect): ShopOverview {
     id: sh.id,
     name: sh.name,
     cashCents: sh.cashCents,
+    displayCashCents: Math.max(0, sh.cashCents),
+    isBankrupt: sh.cashCents < 0,
     lat: sh.lat,
     lng: sh.lng,
     staffCount: sh.staffCount,

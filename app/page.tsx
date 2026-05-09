@@ -49,7 +49,7 @@ export default function Leaderboard() {
           <div className="flex-1 rounded-md overflow-hidden border border-coffee-400/30 shadow-inner min-h-[400px]">
             <ShopMap markers={shops.map((s) => ({
               id: s.id, name: s.name, lat: s.lat, lng: s.lng, colorHex: s.colorHex,
-              cashCents: s.cashCents, agentStrategy: s.agentStrategy,
+              cashCents: s.displayCashCents, isBankrupt: s.isBankrupt, agentStrategy: s.agentStrategy,
             }))} center={center} zoom={16} />
           </div>
           <div className="mt-3 flex flex-wrap gap-3 text-[11px]">
@@ -73,11 +73,14 @@ export default function Leaderboard() {
               const positive = ticker.netChangePct == null ? null : ticker.netChangePct >= 0;
               return (
                 <Link key={shop.id} href={`/team/${shop.id}`} className="block group">
-                  <div className="bg-white rounded-md border border-cream-300 px-4 py-3 shadow-sm hover:border-coffee-400 hover:shadow-md transition">
+                  <div className={`bg-white rounded-md border px-4 py-3 shadow-sm hover:shadow-md transition ${shop.isBankrupt ? "border-rose-300 hover:border-rose-400" : "border-cream-300 hover:border-coffee-400"}`}>
                     <div className="flex items-baseline gap-2 mb-2">
                       <span className="h-2.5 w-2.5 rounded-full inline-block" style={{ backgroundColor: shop.colorHex }} />
                       <div className="font-serif text-base text-coffee-900 group-hover:underline">{shop.name}</div>
                       <span className="text-[11px] tracking-wide text-coffee-700 bg-cream-100 border border-cream-300 px-1.5 py-0.5 rounded">{meta.emoji} {meta.label}</span>
+                      {shop.isBankrupt && (
+                        <span className="text-[10px] uppercase tracking-wider bg-rose-100 text-rose-700 border border-rose-300 px-1.5 py-0.5 rounded font-semibold">Bankrupt</span>
+                      )}
                       {/* Stock-ticker style change indicator */}
                       <span className="ml-auto flex items-center gap-1.5">
                         {hasHistory && <Sparkline values={cashSeries} positive={positive} width={70} height={20} />}
@@ -91,7 +94,7 @@ export default function Leaderboard() {
                       </span>
                     </div>
                     <div className="grid grid-cols-4 gap-3 text-[12px]">
-                      <MiniStat label="Cash" value={fmtUSD(shop.cashCents)} />
+                      <MiniStat label="Cash" value={fmtUSD(shop.displayCashCents)} valueClass={shop.isBankrupt ? "text-rose-700" : "text-coffee-900"} />
                       <MiniStat label="Rating" value={shop.avgRating == null ? "—" : `${shop.avgRating.toFixed(2)}★`} />
                       <MiniStat label="Fulfilled" value={shop.fulfilledOrders.toLocaleString()} valueClass="text-emerald-700" />
                       <MiniStat label="Failed" value={shop.failedOrders.toLocaleString()} valueClass="text-rose-700" />

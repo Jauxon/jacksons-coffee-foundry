@@ -18,8 +18,14 @@ export default async function TeamBrew({ params }: { params: Promise<{ id: strin
 
   return (
     <div className="px-6 py-6 space-y-5">
+      {shop.isBankrupt && (
+        <div className="bg-rose-50 border border-rose-300 rounded-md px-4 py-3 flex items-center gap-3">
+          <span className="text-[10px] uppercase tracking-wider bg-rose-100 text-rose-700 border border-rose-300 px-2 py-0.5 rounded font-semibold">Bankrupt</span>
+          <span className="text-[13px] text-rose-900">Agent paused — strategy ran cash to zero. Reset the sim or wait for revenue to recover.</span>
+        </div>
+      )}
       <div className="grid grid-cols-5 gap-4">
-        <Stat title="Cash" value={fmtUSD(shop.cashCents)} hint="$8,000 starting" />
+        <Stat title="Cash" value={fmtUSD(shop.displayCashCents)} hint="$8,000 starting" valueClass={shop.isBankrupt ? "text-rose-700" : "text-slate-900"} />
         <Stat title="Avg rating" value={shop.avgRating == null ? "—" : `${shop.avgRating.toFixed(2)} ★`} hint={`${shop.totalReviews} reviews`} />
         <Stat title="Fulfilled" value={shop.fulfilledOrders.toLocaleString()} hint={`yesterday: ${shop.yesterdayFulfilled}`} valueClass="text-emerald-700" />
         <Stat title="Failed" value={shop.failedOrders.toLocaleString()} hint={`yesterday: ${shop.yesterdayFailed}`} valueClass="text-rose-700" />

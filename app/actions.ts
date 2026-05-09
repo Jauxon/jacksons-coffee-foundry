@@ -22,6 +22,9 @@ export type ActionResult = { ok: true } | { ok: false; error: string };
 export async function runAgent(shopId: number, opts?: { useHeuristic?: boolean }): Promise<ActionResult> {
   const shop = db.select().from(s.shop).where(eq(s.shop.id, shopId)).get();
   if (!shop) return { ok: false, error: `shop ${shopId} not found` };
+  if (shop.cashCents < 0) {
+    return { ok: false, error: `${shop.name} is bankrupt — agent is paused. Reset the sim to start over.` };
+  }
 
   const useHeuristic = opts?.useHeuristic === true || !process.env.ANTHROPIC_API_KEY;
   try {

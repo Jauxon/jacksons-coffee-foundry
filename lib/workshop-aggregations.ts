@@ -9,6 +9,8 @@ export interface TeamSummary {
   colorHex: string;
   agentStrategy: string;
   cashCents: number;
+  displayCashCents: number;
+  isBankrupt: boolean;
   totalRevenueCents: number;
   totalCogsCents: number;
   totalWagesCents: number;
@@ -111,6 +113,8 @@ export function getWorkshopData(): WorkshopData {
       colorHex: sh.colorHex,
       agentStrategy: sh.agentStrategy,
       cashCents: sh.cashCents,
+      displayCashCents: Math.max(0, sh.cashCents),
+      isBankrupt: sh.cashCents < 0,
       totalRevenueCents: totalRev,
       totalCogsCents: totalCogs,
       totalWagesCents: totalWages,

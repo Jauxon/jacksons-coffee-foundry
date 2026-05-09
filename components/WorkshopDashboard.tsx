@@ -85,12 +85,19 @@ export function WorkshopDashboard({ data }: { data: WorkshopData }) {
 
       <div className="grid grid-cols-3 gap-4 items-start">
         {/* Comparison bar charts — three KPIs */}
-        <Card title="Cash on hand" subtitle="Click a bar to open that team's page.">
+        <Card title="Cash on hand" subtitle="Click a bar to open that team's page. Bankrupt teams clamp at $0.">
           <Bars
             rows={visibleTeams
               .slice()
               .sort((a, b) => b.cashCents - a.cashCents)
-              .map((t) => ({ id: t.shopId, label: t.name, value: t.cashCents, color: t.colorHex, formatted: fmtUSD(t.cashCents), href: `/team/${t.shopId}` }))}
+              .map((t) => ({
+                id: t.shopId,
+                label: t.isBankrupt ? `${t.name} · BANKRUPT` : t.name,
+                value: t.displayCashCents,
+                color: t.isBankrupt ? "#94A3B8" : t.colorHex,
+                formatted: t.isBankrupt ? "BANKRUPT" : fmtUSD(t.displayCashCents),
+                href: `/team/${t.shopId}`,
+              }))}
           />
         </Card>
         <Card title="Cumulative net" subtitle="Revenue − COGS − wages, lifetime.">
@@ -239,9 +246,15 @@ export function WorkshopDashboard({ data }: { data: WorkshopData }) {
                   rating: t.avgRating,
                 },
                 cells: {
-                  name: <span><span className="inline-block h-2 w-2 rounded-full mr-2" style={{ backgroundColor: t.colorHex }} />{t.name}</span>,
+                  name: (
+                    <span>
+                      <span className="inline-block h-2 w-2 rounded-full mr-2" style={{ backgroundColor: t.colorHex }} />
+                      {t.name}
+                      {t.isBankrupt && <span className="ml-2 text-[10px] uppercase tracking-wider bg-rose-100 text-rose-700 border border-rose-300 px-1.5 py-0.5 rounded font-semibold">Bankrupt</span>}
+                    </span>
+                  ),
                   strategy: <span className="capitalize">{t.agentStrategy.replace("_", " ")}</span>,
-                  cash: fmtUSD(t.cashCents),
+                  cash: t.isBankrupt ? <span className="text-rose-700">{fmtUSD(t.displayCashCents)}</span> : fmtUSD(t.displayCashCents),
                   rev: fmtUSD(t.totalRevenueCents),
                   net: <span className={netCls}>{t.totalNetCents >= 0 ? "+" : ""}{fmtUSD(t.totalNetCents)}</span>,
                   ful: t.fulfilled.toLocaleString(),

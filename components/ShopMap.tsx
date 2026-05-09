@@ -20,6 +20,7 @@ export interface ShopMarker {
   lng: number;
   colorHex: string;
   cashCents: number;
+  isBankrupt: boolean;
   agentStrategy: string;
 }
 
@@ -55,7 +56,11 @@ export function ShopMap({
               <div className="text-[12px]">
                 <div className="font-semibold">{m.name}</div>
                 <div className="text-slate-500">{m.agentStrategy}</div>
-                <div className="font-mono mt-1">${(m.cashCents / 100).toFixed(2)}</div>
+                {m.isBankrupt ? (
+                  <div className="font-semibold mt-1 text-rose-700">BANKRUPT</div>
+                ) : (
+                  <div className="font-mono mt-1">${(m.cashCents / 100).toFixed(2)}</div>
+                )}
                 <a href={`/team/${m.id}`} className="text-blue-600 underline">View team →</a>
               </div>
             </Popup>

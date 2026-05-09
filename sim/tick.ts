@@ -491,8 +491,11 @@ export function tick(): TickResult {
     // (skip ingredients/products with pending proposals), so they build a
     // rolling recommendation set the operator can review at any moment.
     // For autoApprove teams, also approve everything pending immediately.
+    // Bankrupt shops (cash < 0) skip the whole loop — strategy paused.
     const isEndOfDay = segment === "night";
     for (const shop of shops) {
+      const fresh = db.select({ c: s.shop.cashCents }).from(s.shop).where(eq(s.shop.id, shop.id)).get();
+      if (fresh && fresh.c < 0) continue;
       try { proposeReorders(shop.id); } catch {}
       if (isEndOfDay) {
         try { proposePriceChanges(shop.id); } catch {}
