@@ -90,36 +90,35 @@ function generateStockoutReview(input: ReviewInputs): GeneratedReview {
 }
 
 function generateFulfilledReview(input: ReviewInputs, segment: Segment): GeneratedReview {
-  let stars = 4;
+  let stars = 4.5;
 
-  if (input.waitSeconds <= 30) stars += 1;
-  else if (input.waitSeconds <= QUICK_WAIT_S) stars += 0.5;
-  else if (input.waitSeconds > ACCEPTABLE_WAIT_S) stars -= 2;
-  else if (input.waitSeconds > 120) stars -= 0.5;
+  if (input.waitSeconds <= 30) stars += 0.7;
+  else if (input.waitSeconds <= QUICK_WAIT_S) stars += 0.3;
+  else if (input.waitSeconds > ACCEPTABLE_WAIT_S) stars -= 1.5;
+  else if (input.waitSeconds > 120) stars -= 0.3;
 
   // Quality: bidirectional with rare disasters so 1- and 2-star reviews exist.
   const qualityRoll = Math.random();
   let qualityBucket: "great" | "ok" | "meh" | "bad" = "ok";
-  if (qualityRoll < 0.05) { stars -= 2; qualityBucket = "bad"; }
-  else if (qualityRoll < 0.18) { stars -= 1; qualityBucket = "meh"; }
-  else if (qualityRoll > 0.85) { stars += 1; qualityBucket = "great"; }
+  if (qualityRoll < 0.04) { stars -= 2; qualityBucket = "bad"; }
+  else if (qualityRoll < 0.15) { stars -= 1; qualityBucket = "meh"; }
+  else if (qualityRoll > 0.80) { stars += 0.5; qualityBucket = "great"; }
 
-  // Load / understaffing: a backed-up shop pulls reviews down even if the
-  // wait technically fit under the gate. Sole-barista shops eat an extra
-  // penalty when load is anywhere near capacity — clearly slammed.
+  // Load / understaffing: a backed-up shop pulls reviews down. Softer than
+  // before — these are flavor, not the dominant factor.
   let staffingFlag = false;
-  if (input.loadRatio > 1.5) { stars -= 1; staffingFlag = true; }
-  else if (input.loadRatio > 1.0) { stars -= 0.5; staffingFlag = true; }
-  if (input.staffCount === 1 && input.loadRatio > 0.7 && Math.random() < 0.4) {
-    stars -= 0.5;
+  if (input.loadRatio > 1.5) { stars -= 0.7; staffingFlag = true; }
+  else if (input.loadRatio > 1.0) { stars -= 0.3; staffingFlag = true; }
+  if (input.staffCount === 1 && input.loadRatio > 0.7 && Math.random() < 0.3) {
+    stars -= 0.3;
     staffingFlag = true;
   }
 
   // Sub-integer noise so identical situations spread across integers.
   stars += (Math.random() - 0.5) * 0.6;
 
-  if (input.priceCents > PRICEY_CENTS && Math.random() < 0.4) stars -= 1;
-  if (input.priceCents > VERY_PRICEY_CENTS && Math.random() < 0.6) stars -= 1;
+  if (input.priceCents > PRICEY_CENTS && Math.random() < 0.3) stars -= 1;
+  if (input.priceCents > VERY_PRICEY_CENTS && Math.random() < 0.5) stars -= 1;
 
   stars = Math.max(1, Math.min(5, Math.round(stars)));
 
