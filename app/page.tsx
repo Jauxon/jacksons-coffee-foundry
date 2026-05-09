@@ -116,7 +116,6 @@ export default function Leaderboard() {
                   <span key={s.ingredientName}>
                     {i > 0 && ", "}
                     <span className="font-mono">{s.ingredientName.replace(/_/g, " ")}</span>
-                    {s.inTransitQty > 0 && <span className="text-rose-600/80"> ({s.inTransitQty.toLocaleString()} in transit)</span>}
                   </span>
                 ))}
               </div>

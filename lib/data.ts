@@ -186,8 +186,10 @@ export interface StockoutRow {
   inTransitQty: number;
 }
 
-// Ingredients with zero unexpired stock that aren't tap-supplied.
-// Used to surface "out of milk" type alerts on the leaderboard.
+// Ingredients with zero unexpired stock, no in-transit PO covering them, and
+// not tap-supplied. The in-transit filter means the alert disappears as soon
+// as the operator approves the agent's reorder proposal — the action they'd
+// take in response to the alert.
 export function getCurrentStockouts(shopId: number): StockoutRow[] {
   const state = getSimState();
   const ingredients = db.select().from(s.ingredient).where(eq(s.ingredient.isTapSupplied, false)).all();
@@ -207,7 +209,9 @@ export function getCurrentStockouts(shopId: number): StockoutRow[] {
         eq(s.purchaseOrder.ingredientId, ing.id),
         eq(s.purchaseOrder.status, "in_transit"),
       )).get();
-    out.push({ ingredientName: ing.name, inTransitQty: Number(it?.q ?? 0) });
+    const inTransitQty = Number(it?.q ?? 0);
+    if (inTransitQty > 0) continue;
+    out.push({ ingredientName: ing.name, inTransitQty });
   }
   return out;
 }
