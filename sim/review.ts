@@ -8,7 +8,12 @@ export interface ReviewInputs {
   customerName: string;
   waitSeconds: number;
   priceCents: number;
-  status: "fulfilled";
+  status: "fulfilled" | "stockout";
+  // Load felt by the customer: arrivalIdx / serviceCapacity. >1 = backed up.
+  loadRatio: number;
+  staffCount: number;
+  // For stockout reviews — the ingredient that ran out (e.g. "oat_milk").
+  stockoutIngredientName?: string;
 }
 
 export interface GeneratedReview {
@@ -18,8 +23,8 @@ export interface GeneratedReview {
 
 const QUICK_WAIT_S = 60;
 const ACCEPTABLE_WAIT_S = 240;
-const PRICEY_CENTS = 700;       // NYC base latte is ~$5.75; tax kicks in above ~$7
-const VERY_PRICEY_CENTS = 1000; // stacked tax above ~$10
+const PRICEY_CENTS = 700;
+const VERY_PRICEY_CENTS = 1000;
 
 const WAIT_PHRASES = {
   quick: ["served in no time", "barely a wait", "quick turnaround"],
@@ -31,6 +36,7 @@ const QUALITY_PHRASES = {
   great: ["nicely pulled shot", "well-balanced flavor", "solid pour"],
   ok: ["decent enough cup", "did the job", "fine for a midtown stop"],
   meh: ["nothing remarkable", "underwhelming for the price", "average at best"],
+  bad: ["bitter and burnt", "weak and watery", "not what I ordered"],
 };
 
 const PRICE_PHRASES_PRICEY = [
@@ -39,15 +45,53 @@ const PRICE_PHRASES_PRICEY = [
   "paid the tourist tax",
 ];
 
+const STAFFING_PHRASES = [
+  "looked overwhelmed back there",
+  "barista was clearly slammed",
+  "single barista juggling everyone",
+  "shop felt understaffed",
+];
+
+const STOCKOUT_PHRASES = [
+  "they were out of {ing}, had to switch up my order",
+  "out of {ing} again",
+  "no {ing} on the day I came in",
+  "told they didn't have {ing}, walked",
+];
+
 function pick<T>(arr: readonly T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
 export function generateReview(input: ReviewInputs, segment: Segment): GeneratedReview {
-  // Stars: most cups land at 4–5; quality occasionally drags one to 2–3.
-  // Pricing tax stacks above $7 (premium) and $10 (luxury) so premium teams
-  // get pulled lower than cheap teams without flattening everyone.
+  if (input.status === "stockout") {
+    return generateStockoutReview(input);
+  }
+  return generateFulfilledReview(input, segment);
+}
+
+function generateStockoutReview(input: ReviewInputs): GeneratedReview {
+  // Stockout reviewers are angry. Base 2, drop further if they waited a long
+  // time before being told no, with sub-integer noise so we get a 1–3 spread.
+  let stars = 2;
+  if (input.waitSeconds > 180) stars -= 1;
+  if (Math.random() < 0.25) stars -= 1; // grumpier customer
+  else if (Math.random() < 0.15) stars += 1; // resigned, "it happens"
+  stars += (Math.random() - 0.5) * 0.6;
+  stars = Math.max(1, Math.min(5, Math.round(stars)));
+
+  const ing = (input.stockoutIngredientName ?? "an ingredient").replace(/_/g, " ");
+  const phrase = pick(STOCKOUT_PHRASES).replace("{ing}", ing);
+  const tail = stars <= 2
+    ? "Won't be back any time soon."
+    : "Hopefully sorted next time.";
+  const body = `${capitalize(phrase)} on a ${input.productName.toLowerCase()}. ${tail}`;
+  return { stars, body };
+}
+
+function generateFulfilledReview(input: ReviewInputs, segment: Segment): GeneratedReview {
   let stars = 4;
+
   if (input.waitSeconds <= 30) stars += 1;
   else if (input.waitSeconds <= QUICK_WAIT_S) stars += 0.5;
   else if (input.waitSeconds > ACCEPTABLE_WAIT_S) stars -= 2;
@@ -55,11 +99,23 @@ export function generateReview(input: ReviewInputs, segment: Segment): Generated
 
   // Quality: bidirectional with rare disasters so 1- and 2-star reviews exist.
   const qualityRoll = Math.random();
-  if (qualityRoll < 0.05) stars -= 2;
-  else if (qualityRoll < 0.18) stars -= 1;
-  else if (qualityRoll > 0.85) stars += 1;
+  let qualityBucket: "great" | "ok" | "meh" | "bad" = "ok";
+  if (qualityRoll < 0.05) { stars -= 2; qualityBucket = "bad"; }
+  else if (qualityRoll < 0.18) { stars -= 1; qualityBucket = "meh"; }
+  else if (qualityRoll > 0.85) { stars += 1; qualityBucket = "great"; }
 
-  // Sub-integer noise so identical situations don't all round the same way.
+  // Load / understaffing: a backed-up shop pulls reviews down even if the
+  // wait technically fit under the gate. Sole-barista shops eat an extra
+  // penalty when load is anywhere near capacity — clearly slammed.
+  let staffingFlag = false;
+  if (input.loadRatio > 1.5) { stars -= 1; staffingFlag = true; }
+  else if (input.loadRatio > 1.0) { stars -= 0.5; staffingFlag = true; }
+  if (input.staffCount === 1 && input.loadRatio > 0.7 && Math.random() < 0.4) {
+    stars -= 0.5;
+    staffingFlag = true;
+  }
+
+  // Sub-integer noise so identical situations spread across integers.
   stars += (Math.random() - 0.5) * 0.6;
 
   if (input.priceCents > PRICEY_CENTS && Math.random() < 0.4) stars -= 1;
@@ -70,14 +126,12 @@ export function generateReview(input: ReviewInputs, segment: Segment): Generated
   const waitBucket =
     input.waitSeconds <= QUICK_WAIT_S ? "quick" :
     input.waitSeconds <= ACCEPTABLE_WAIT_S ? "ok" : "slow";
-  const qualityBucket =
-    stars >= 5 ? "great" :
-    stars >= 3 ? "ok" : "meh";
 
   const parts: string[] = [
     `${pick(WAIT_PHRASES[waitBucket])} on the ${input.productName.toLowerCase()}`,
     pick(QUALITY_PHRASES[qualityBucket]),
   ];
+  if (staffingFlag && Math.random() < 0.5) parts.push(pick(STAFFING_PHRASES));
   if (input.priceCents > PRICEY_CENTS && Math.random() < 0.5) {
     parts.push(pick(PRICE_PHRASES_PRICEY));
   }

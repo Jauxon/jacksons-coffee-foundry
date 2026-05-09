@@ -277,7 +277,7 @@ function serviceCustomer(
   }
 
   if (stockedOut) {
-    db.insert(s.customerOrder).values({
+    const [orderRow] = db.insert(s.customerOrder).values({
       shopId: ctx.shop.id,
       customerId: customer.id,
       productId: wantedProduct.id,
@@ -286,8 +286,33 @@ function serviceCustomer(
       status: "stockout",
       waitSeconds: Math.round(expWait),
       stockoutIngredientId,
-    }).run();
+    }).returning().all();
     ctx.stockouts++;
+    // Stockout customers post angry reviews more often than satisfied ones.
+    if (Math.random() < 0.5) {
+      const ingName = stockoutIngredientId
+        ? db.select({ n: s.ingredient.name }).from(s.ingredient).where(eq(s.ingredient.id, stockoutIngredientId)).get()?.n ?? undefined
+        : undefined;
+      const review = generateReview({
+        productName: wantedProduct.name,
+        customerName: customer.name,
+        waitSeconds: Math.round(expWait),
+        priceCents: wantedProduct.priceCents,
+        status: "stockout",
+        loadRatio: arrivalIdx / Math.max(ctx.capacity, 1),
+        staffCount: ctx.shop.staffCount,
+        stockoutIngredientName: ingName ?? undefined,
+      }, state.segment as Segment);
+      db.insert(s.review).values({
+        shopId: ctx.shop.id,
+        customerOrderId: orderRow.id,
+        customerId: customer.id,
+        stars: review.stars,
+        body: review.body,
+        day: state.day,
+        segment: state.segment,
+      }).run();
+    }
     return;
   }
 
@@ -310,23 +335,29 @@ function serviceCustomer(
     cogsCents: Math.round(orderCogsCents),
   }).returning().all();
 
-  const review = generateReview({
-    productName: wantedProduct.name,
-    customerName: customer.name,
-    waitSeconds: Math.round(expWait),
-    priceCents: wantedProduct.priceCents,
-    status: "fulfilled",
-  }, state.segment as Segment);
-
-  db.insert(s.review).values({
-    shopId: ctx.shop.id,
-    customerOrderId: orderRow.id,
-    customerId: customer.id,
-    stars: review.stars,
-    body: review.body,
-    day: state.day,
-    segment: state.segment,
-  }).run();
+  // Only ~35% of fulfilled customers post a review. Real Yelp behavior — most
+  // people don't bother when service is fine. Combined with stockout reviews
+  // posting at ~50%, this skews aggregate ratings toward the unhappy tail.
+  if (Math.random() < 0.35) {
+    const review = generateReview({
+      productName: wantedProduct.name,
+      customerName: customer.name,
+      waitSeconds: Math.round(expWait),
+      priceCents: wantedProduct.priceCents,
+      status: "fulfilled",
+      loadRatio: arrivalIdx / Math.max(ctx.capacity, 1),
+      staffCount: ctx.shop.staffCount,
+    }, state.segment as Segment);
+    db.insert(s.review).values({
+      shopId: ctx.shop.id,
+      customerOrderId: orderRow.id,
+      customerId: customer.id,
+      stars: review.stars,
+      body: review.body,
+      day: state.day,
+      segment: state.segment,
+    }).run();
+  }
 
   ctx.fulfilled++;
   ctx.revenueCents += wantedProduct.priceCents;
