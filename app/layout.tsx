@@ -1,6 +1,7 @@
 import "./globals.css";
 import "leaflet/dist/leaflet.css";
 import type { ReactNode } from "react";
+import Script from "next/script";
 import { TopChrome } from "../components/TopChrome.tsx";
 import { WelcomeModal } from "../components/WelcomeModal.tsx";
 
@@ -21,6 +22,11 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <TopChrome />
         <main className="min-h-[calc(100vh-44px)]">{children}</main>
         <WelcomeModal />
+        <Script
+          src="https://static.cloudflareinsights.com/beacon.min.js"
+          strategy="afterInteractive"
+          data-cf-beacon='{"token": "26ed6dac267a4d7b800393ec308daba4"}'
+        />
       </body>
     </html>
   );
