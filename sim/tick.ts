@@ -288,8 +288,9 @@ function serviceCustomer(
       stockoutIngredientId,
     }).returning().all();
     ctx.stockouts++;
-    // Stockout customers post angry reviews more often than satisfied ones.
-    if (Math.random() < 0.5) {
+    // Stockout customers post angry reviews; rate dialed down so they don't
+    // dominate the aggregate rating.
+    if (Math.random() < 0.3) {
       const ingName = stockoutIngredientId
         ? db.select({ n: s.ingredient.name }).from(s.ingredient).where(eq(s.ingredient.id, stockoutIngredientId)).get()?.n ?? undefined
         : undefined;
@@ -335,10 +336,10 @@ function serviceCustomer(
     cogsCents: Math.round(orderCogsCents),
   }).returning().all();
 
-  // Only ~35% of fulfilled customers post a review. Real Yelp behavior — most
-  // people don't bother when service is fine. Combined with stockout reviews
-  // posting at ~50%, this skews aggregate ratings toward the unhappy tail.
-  if (Math.random() < 0.35) {
+  // ~50% of fulfilled customers post a review. Higher than real-world Yelp
+  // (where mostly the unhappy ones bother), but the demo wants ratings to
+  // settle in the 4.5–4.7 range rather than skewing toward the unhappy tail.
+  if (Math.random() < 0.5) {
     const review = generateReview({
       productName: wantedProduct.name,
       customerName: customer.name,

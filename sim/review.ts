@@ -71,12 +71,12 @@ export function generateReview(input: ReviewInputs, segment: Segment): Generated
 }
 
 function generateStockoutReview(input: ReviewInputs): GeneratedReview {
-  // Stockout reviewers are angry. Base 2, drop further if they waited a long
-  // time before being told no, with sub-integer noise so we get a 1–3 spread.
-  let stars = 2;
+  // Stockout reviewers are annoyed. Base 2.5, drop further if they waited a
+  // long time before being told no, with sub-integer noise for a 1–4 spread.
+  let stars = 2.5;
   if (input.waitSeconds > 180) stars -= 1;
-  if (Math.random() < 0.25) stars -= 1; // grumpier customer
-  else if (Math.random() < 0.15) stars += 1; // resigned, "it happens"
+  if (Math.random() < 0.20) stars -= 1; // grumpier customer
+  else if (Math.random() < 0.20) stars += 1; // resigned, "it happens"
   stars += (Math.random() - 0.5) * 0.6;
   stars = Math.max(1, Math.min(5, Math.round(stars)));
 
@@ -90,26 +90,26 @@ function generateStockoutReview(input: ReviewInputs): GeneratedReview {
 }
 
 function generateFulfilledReview(input: ReviewInputs, segment: Segment): GeneratedReview {
-  let stars = 4.5;
+  let stars = 4.7;
 
-  if (input.waitSeconds <= 30) stars += 0.7;
-  else if (input.waitSeconds <= QUICK_WAIT_S) stars += 0.3;
-  else if (input.waitSeconds > ACCEPTABLE_WAIT_S) stars -= 1.5;
-  else if (input.waitSeconds > 120) stars -= 0.3;
+  if (input.waitSeconds <= 30) stars += 0.5;
+  else if (input.waitSeconds <= QUICK_WAIT_S) stars += 0.2;
+  else if (input.waitSeconds > ACCEPTABLE_WAIT_S) stars -= 1.2;
+  else if (input.waitSeconds > 120) stars -= 0.2;
 
-  // Quality: bidirectional with rare disasters so 1- and 2-star reviews exist.
+  // Quality: skewed positive with rare disasters so 1–2 star reviews exist
+  // but don't dominate.
   const qualityRoll = Math.random();
   let qualityBucket: "great" | "ok" | "meh" | "bad" = "ok";
-  if (qualityRoll < 0.04) { stars -= 2; qualityBucket = "bad"; }
-  else if (qualityRoll < 0.15) { stars -= 1; qualityBucket = "meh"; }
-  else if (qualityRoll > 0.80) { stars += 0.5; qualityBucket = "great"; }
+  if (qualityRoll < 0.03) { stars -= 2; qualityBucket = "bad"; }
+  else if (qualityRoll < 0.10) { stars -= 1; qualityBucket = "meh"; }
+  else if (qualityRoll > 0.75) { stars += 0.3; qualityBucket = "great"; }
 
-  // Load / understaffing: a backed-up shop pulls reviews down. Softer than
-  // before — these are flavor, not the dominant factor.
+  // Load / understaffing: flavor, not the dominant factor.
   let staffingFlag = false;
-  if (input.loadRatio > 1.5) { stars -= 0.7; staffingFlag = true; }
-  else if (input.loadRatio > 1.0) { stars -= 0.3; staffingFlag = true; }
-  if (input.staffCount === 1 && input.loadRatio > 0.7 && Math.random() < 0.3) {
+  if (input.loadRatio > 1.5) { stars -= 0.5; staffingFlag = true; }
+  else if (input.loadRatio > 1.0) { stars -= 0.2; staffingFlag = true; }
+  if (input.staffCount === 1 && input.loadRatio > 0.7 && Math.random() < 0.2) {
     stars -= 0.3;
     staffingFlag = true;
   }
@@ -117,8 +117,8 @@ function generateFulfilledReview(input: ReviewInputs, segment: Segment): Generat
   // Sub-integer noise so identical situations spread across integers.
   stars += (Math.random() - 0.5) * 0.6;
 
-  if (input.priceCents > PRICEY_CENTS && Math.random() < 0.3) stars -= 1;
-  if (input.priceCents > VERY_PRICEY_CENTS && Math.random() < 0.5) stars -= 1;
+  if (input.priceCents > PRICEY_CENTS && Math.random() < 0.25) stars -= 1;
+  if (input.priceCents > VERY_PRICEY_CENTS && Math.random() < 0.4) stars -= 1;
 
   stars = Math.max(1, Math.min(5, Math.round(stars)));
 
