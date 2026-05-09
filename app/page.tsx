@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getAllShops, getRecentReviews, getSimState, getTicker, fmtUSD, STRATEGY_META } from "../lib/data.ts";
+import { getAllShops, getRecentReviews, getSimState, getTicker, getCurrentStockouts, fmtUSD, STRATEGY_META } from "../lib/data.ts";
 import { ShopMapClient as ShopMap } from "../components/ShopMapClient.tsx";
 import { SimControls } from "../components/SimControls.tsx";
 import { Sparkline } from "../components/Sparkline.tsx";
@@ -12,6 +12,9 @@ export default function Leaderboard() {
   const sim = getSimState();
   const reviews = getRecentReviews({ limit: 25 });
   const llm = getLLMUsage();
+
+  const fdc = shops.find((s) => s.agentStrategy === "human");
+  const fdcStockouts = fdc ? getCurrentStockouts(fdc.id) : [];
 
   // Map center: average of all shop positions, falling back to Times Square.
   const center = shops.length === 0
@@ -98,6 +101,27 @@ export default function Leaderboard() {
               );
             })}
           </div>
+
+          {fdc && fdcStockouts.length > 0 && (
+            <div className="mt-4 rounded-md border border-rose-300 bg-rose-50 px-4 py-3">
+              <div className="flex items-baseline gap-2 mb-1">
+                <span className="text-rose-700">⚠</span>
+                <div className="font-medium text-rose-900 text-[13px]">{fdc.name} is out of stock</div>
+                <Link href={`/team/${fdc.id}/proposals`} className="ml-auto text-[11px] text-rose-700 hover:underline">
+                  Review proposals →
+                </Link>
+              </div>
+              <div className="text-[12px] text-rose-800 leading-relaxed">
+                {fdcStockouts.map((s, i) => (
+                  <span key={s.ingredientName}>
+                    {i > 0 && ", "}
+                    <span className="font-mono">{s.ingredientName.replace(/_/g, " ")}</span>
+                    {s.inTransitQty > 0 && <span className="text-rose-600/80"> ({s.inTransitQty.toLocaleString()} in transit)</span>}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
         </section>
 
         {/* RIGHT — reviews */}

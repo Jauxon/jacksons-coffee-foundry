@@ -181,6 +181,37 @@ export function getInventoryByIngredient(shopId: number): InventoryRow[] {
   return out;
 }
 
+export interface StockoutRow {
+  ingredientName: string;
+  inTransitQty: number;
+}
+
+// Ingredients with zero unexpired stock that aren't tap-supplied.
+// Used to surface "out of milk" type alerts on the leaderboard.
+export function getCurrentStockouts(shopId: number): StockoutRow[] {
+  const state = getSimState();
+  const ingredients = db.select().from(s.ingredient).where(eq(s.ingredient.isTapSupplied, false)).all();
+  const out: StockoutRow[] = [];
+  for (const ing of ingredients) {
+    const cur = db.select({
+      total: sql<number>`COALESCE(SUM(${s.inventoryBatch.remainingQty}), 0)`,
+    }).from(s.inventoryBatch).where(and(
+      eq(s.inventoryBatch.shopId, shopId),
+      eq(s.inventoryBatch.ingredientId, ing.id),
+      gt(s.inventoryBatch.expiresDay, state.day - 1),
+    )).get();
+    if (Number(cur?.total ?? 0) > 0) continue;
+    const it = db.select({ q: sql<number>`COALESCE(SUM(${s.purchaseOrder.qty}), 0)` })
+      .from(s.purchaseOrder).where(and(
+        eq(s.purchaseOrder.shopId, shopId),
+        eq(s.purchaseOrder.ingredientId, ing.id),
+        eq(s.purchaseOrder.status, "in_transit"),
+      )).get();
+    out.push({ ingredientName: ing.name, inTransitQty: Number(it?.q ?? 0) });
+  }
+  return out;
+}
+
 export interface InventoryBatchRow {
   id: number;
   ingredientName: string;
