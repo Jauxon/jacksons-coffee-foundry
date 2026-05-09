@@ -13,7 +13,7 @@ export default async function TeamBrew({ params }: { params: Promise<{ id: strin
   const reviews = getRecentReviews({ shopId, limit: 8 });
   const pendingProposals = getProposals(shopId).filter((p) => p.status === "pending");
 
-  const storagePct = Math.min(100, Math.round((shop.storageUsedUnits / shop.storageCapacityUnits) * 100));
+  const storagePct = Math.max(0, Math.min(100, Math.round((shop.storageUsedUnits / Math.max(shop.storageCapacityUnits, 1)) * 100)));
   const storageBarClass = storagePct > 90 ? "bg-rose-500" : storagePct > 75 ? "bg-amber-500" : "bg-emerald-500";
 
   return (
