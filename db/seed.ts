@@ -57,7 +57,7 @@ const teamSeed = [
     staffCount: 1,
     colorHex: "#2563EB", // blue
     autoApprove: true,
-    priceMultiplier: 0.92,
+    priceMultiplier: 0.96,
     storageCapacityUnits: 40_000, // hole-in-the-wall
   },
   // Premium — higher prices, premium vendors only, smaller volume

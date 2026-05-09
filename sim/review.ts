@@ -18,8 +18,8 @@ export interface GeneratedReview {
 
 const QUICK_WAIT_S = 60;
 const ACCEPTABLE_WAIT_S = 240;
-const PRICEY_CENTS = 500;
-const VERY_PRICEY_CENTS = 800;
+const PRICEY_CENTS = 700;       // NYC base latte is ~$5.75; tax kicks in above ~$7
+const VERY_PRICEY_CENTS = 1000; // stacked tax above ~$10
 
 const WAIT_PHRASES = {
   quick: ["served in no time", "barely a wait", "quick turnaround"],
@@ -44,23 +44,25 @@ function pick<T>(arr: readonly T[]): T {
 }
 
 export function generateReview(input: ReviewInputs, segment: Segment): GeneratedReview {
-  // Stars: base in the middle and pull either direction. Variance is wide on
-  // purpose so averages don't converge at the cap.
-  let stars = 3.5;
+  // Stars: most cups land at 4–5; quality occasionally drags one to 2–3.
+  // Pricing tax stacks above $7 (premium) and $10 (luxury) so premium teams
+  // get pulled lower than cheap teams without flattening everyone.
+  let stars = 4;
   if (input.waitSeconds <= 30) stars += 1;
   else if (input.waitSeconds <= QUICK_WAIT_S) stars += 0.5;
   else if (input.waitSeconds > ACCEPTABLE_WAIT_S) stars -= 2;
   else if (input.waitSeconds > 120) stars -= 0.5;
 
-  // Quality: bidirectional with occasional disasters so 1- and 2-star reviews exist.
+  // Quality: bidirectional with rare disasters so 1- and 2-star reviews exist.
   const qualityRoll = Math.random();
-  if (qualityRoll < 0.10) stars -= 2;
-  else if (qualityRoll < 0.30) stars -= 1;
+  if (qualityRoll < 0.05) stars -= 2;
+  else if (qualityRoll < 0.18) stars -= 1;
   else if (qualityRoll > 0.85) stars += 1;
-  else if (qualityRoll > 0.97) stars += 2;
 
-  // Price tax — fires more often, stacks on truly expensive cups.
-  if (input.priceCents > PRICEY_CENTS && Math.random() < 0.55) stars -= 1;
+  // Sub-integer noise so identical situations don't all round the same way.
+  stars += (Math.random() - 0.5) * 0.6;
+
+  if (input.priceCents > PRICEY_CENTS && Math.random() < 0.4) stars -= 1;
   if (input.priceCents > VERY_PRICEY_CENTS && Math.random() < 0.6) stars -= 1;
 
   stars = Math.max(1, Math.min(5, Math.round(stars)));
