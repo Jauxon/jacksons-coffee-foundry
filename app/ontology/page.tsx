@@ -78,7 +78,7 @@ function buildNodes(c: ReturnType<typeof liveCounts>): Node[] {
   ];
 }
 
-// ---------- Edges with action labels (Palantir-style flow callouts) ----------
+// ---------- Edges with action labels ----------
 const EDGES: { from: string; to: string; action: string; dashed?: boolean }[] = [
   { from: "CustomerOrder", to: "Customer", action: "by" },
   { from: "Review", to: "CustomerOrder", action: "Generate Review" },

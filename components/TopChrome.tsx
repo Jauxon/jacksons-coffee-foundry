@@ -1,7 +1,6 @@
 import Link from "next/link";
-import { AboutButton } from "./AboutButton.tsx";
 
-// Foundry-style top chrome.
+// Top chrome.
 // Per-team navigation lives inside the team layout; this is the build-space header.
 export function TopChrome() {
   return (
@@ -25,7 +24,6 @@ export function TopChrome() {
         <Link href="/audit" className="hover:underline">Audit</Link>
       </nav>
       <div className="ml-auto flex items-center gap-3 text-slate-600">
-        <AboutButton />
         <span className="inline-flex items-center gap-1 px-2 py-1 rounded border border-slate-200 bg-slate-50">
           <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><circle cx="4" cy="4" r="2" fill="#16A34A"/><circle cx="4" cy="12" r="2" fill="#94A3B8"/><circle cx="12" cy="8" r="2" fill="#94A3B8"/><path d="M4 6v4M6 4h6M6 12h6" stroke="currentColor" strokeWidth="1.2"/></svg>
           Main

@@ -3,7 +3,6 @@ import "leaflet/dist/leaflet.css";
 import type { ReactNode } from "react";
 import Script from "next/script";
 import { TopChrome } from "../components/TopChrome.tsx";
-import { WelcomeModal } from "../components/WelcomeModal.tsx";
 
 // Pin every route to the Node.js runtime — better-sqlite3 + native modules
 // can't run on Vercel's edge runtime, and the larger memory pool also tends
@@ -21,7 +20,6 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body className="min-h-screen bg-cream-50">
         <TopChrome />
         <main className="min-h-[calc(100vh-44px)]">{children}</main>
-        <WelcomeModal />
         <Script
           src="https://static.cloudflareinsights.com/beacon.min.js"
           strategy="afterInteractive"
