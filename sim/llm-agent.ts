@@ -16,7 +16,7 @@ import { db, schema as s } from "../db/client.ts";
 import { eq, and, gt, sql } from "drizzle-orm";
 
 const client = new Anthropic();
-const MODEL = "claude-opus-4-7";
+export const MODEL = "claude-opus-4-7";
 
 // ----------------------------------------------------------------------------
 // Per-instance LLM budget — keeps a casual demo visitor from draining your
@@ -28,6 +28,46 @@ let _llmCallsUsed = 0;
 
 export function getLLMUsage(): { used: number; budget: number; remaining: number } {
   return { used: _llmCallsUsed, budget: LLM_CALL_BUDGET, remaining: Math.max(0, LLM_CALL_BUDGET - _llmCallsUsed) };
+}
+
+// ----------------------------------------------------------------------------
+// Inference telemetry — persist one row per call (success or failure) so the
+// /inference panel can chart cost, latency, and cache effectiveness. Best-effort:
+// a telemetry write must never break the agent, so we swallow insert errors.
+// ----------------------------------------------------------------------------
+function recordLLMCall(
+  shopId: number,
+  strategy: string,
+  snap: { current_day: number; segment: string },
+  m: {
+    latencyMs: number;
+    usage: { input_tokens: number; cache_creation_input_tokens: number; cache_read_input_tokens: number; output_tokens: number };
+    proposals: number;
+    ok: boolean;
+    errorText?: string;
+  },
+): void {
+  try {
+    db.insert(s.llmCall).values({
+      shopId,
+      agentName: "reorder-llm",
+      model: MODEL,
+      strategy,
+      day: snap.current_day,
+      segment: snap.segment,
+      inputTokens: m.usage.input_tokens,
+      cacheCreationTokens: m.usage.cache_creation_input_tokens,
+      cacheReadTokens: m.usage.cache_read_input_tokens,
+      outputTokens: m.usage.output_tokens,
+      latencyMs: m.latencyMs,
+      proposals: m.proposals,
+      ok: m.ok,
+      errorText: m.errorText ?? null,
+      createdAt: new Date(),
+    }).run();
+  } catch (e) {
+    console.warn("[llm-agent] failed to record telemetry:", (e as Error).message);
+  }
 }
 
 // ----------------------------------------------------------------------------
@@ -360,35 +400,59 @@ export async function proposeReordersWithLLM(shopId: number): Promise<LLMAgentRe
   const effectiveStrategy = agentStrategy === "human" ? "premium_pricer" : agentStrategy;
   const systemPrompt = buildSystemPrompt(shopId, effectiveStrategy, snapshot.team_name);
 
-  const response = await client.messages.create({
-    model: MODEL,
-    max_tokens: 8192,
-    thinking: { type: "adaptive" },
-    tools: [REORDER_TOOL],
-    // Note: forcing tool_choice is incompatible with thinking. With only one tool
-    // and an explicit system-prompt instruction to call it, auto is reliable.
-    system: [
-      {
-        type: "text",
-        text: systemPrompt,
-        cache_control: { type: "ephemeral" },
-      },
-    ],
-    messages: [
-      {
-        role: "user",
-        content: [
-          {
-            type: "text",
-            text: `Current world snapshot (JSON):\n\`\`\`json\n${JSON.stringify(snapshot, null, 2)}\n\`\`\`\n\nDecide on reorders now. Call submit_reorder_proposals exactly once.`,
-          },
-        ],
-      },
-    ],
-  });
+  const t0 = Date.now();
+  let response: Anthropic.Message;
+  try {
+    response = await client.messages.create({
+      model: MODEL,
+      max_tokens: 8192,
+      thinking: { type: "adaptive" },
+      tools: [REORDER_TOOL],
+      // Note: forcing tool_choice is incompatible with thinking. With only one tool
+      // and an explicit system-prompt instruction to call it, auto is reliable.
+      system: [
+        {
+          type: "text",
+          text: systemPrompt,
+          cache_control: { type: "ephemeral" },
+        },
+      ],
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: `Current world snapshot (JSON):\n\`\`\`json\n${JSON.stringify(snapshot, null, 2)}\n\`\`\`\n\nDecide on reorders now. Call submit_reorder_proposals exactly once.`,
+            },
+          ],
+        },
+      ],
+    });
+  } catch (e) {
+    recordLLMCall(shopId, effectiveStrategy, snapshot, {
+      latencyMs: Date.now() - t0,
+      usage: { input_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0, output_tokens: 0 },
+      proposals: 0,
+      ok: false,
+      errorText: (e as Error).message,
+    });
+    throw e;
+  }
+  const latencyMs = Date.now() - t0;
+  const usage = {
+    input_tokens: response.usage.input_tokens,
+    cache_creation_input_tokens: response.usage.cache_creation_input_tokens ?? 0,
+    cache_read_input_tokens: response.usage.cache_read_input_tokens ?? 0,
+    output_tokens: response.usage.output_tokens,
+  };
 
   const toolUse = response.content.find((b) => b.type === "tool_use");
   if (!toolUse || toolUse.type !== "tool_use") {
+    recordLLMCall(shopId, effectiveStrategy, snapshot, {
+      latencyMs, usage, proposals: 0, ok: false,
+      errorText: `expected tool_use response, got stop_reason=${response.stop_reason}`,
+    });
     throw new Error(`expected tool_use response, got stop_reason=${response.stop_reason}`);
   }
 
@@ -423,15 +487,19 @@ export async function proposeReordersWithLLM(shopId: number): Promise<LLMAgentRe
     }).run();
   }
 
+  recordLLMCall(shopId, effectiveStrategy, snapshot, {
+    latencyMs, usage, proposals: persisted.length, ok: true,
+  });
+
   return {
     proposals: persisted.length,
     summary: input.summary,
     decisions: persisted,
     usage: {
-      input_tokens: response.usage.input_tokens,
-      cache_creation_input_tokens: response.usage.cache_creation_input_tokens ?? 0,
-      cache_read_input_tokens: response.usage.cache_read_input_tokens ?? 0,
-      output_tokens: response.usage.output_tokens,
+      input_tokens: usage.input_tokens,
+      cache_creation_input_tokens: usage.cache_creation_input_tokens,
+      cache_read_input_tokens: usage.cache_read_input_tokens,
+      output_tokens: usage.output_tokens,
     },
   };
 }

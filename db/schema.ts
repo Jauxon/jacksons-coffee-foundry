@@ -257,3 +257,37 @@ export const agentProposal = sqliteTable("agent_proposal", {
   createdSegment: text("created_segment").notNull(),
   decidedAt: integer("decided_at", { mode: "timestamp" }),
 });
+
+// ============================================================
+// Inference telemetry — one row per LLM call.
+// Raw token counts + latency are the durable record; all dollar
+// figures (and the no-cache counterfactual) are derived in
+// lib/llm-metrics.ts from a pricing table, so a model-price change
+// never requires a backfill.
+// ============================================================
+export const llmCall = sqliteTable(
+  "llm_call",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    shopId: integer("shop_id").references(() => shop.id),
+    agentName: text("agent_name").notNull(), // "reorder-llm"
+    model: text("model").notNull(),          // "claude-opus-4-7"
+    strategy: text("strategy"),              // effective strategy used for the prompt
+    day: integer("day").notNull(),
+    segment: text("segment").notNull(),
+    // Anthropic usage breakdown. input_tokens here is the UNCACHED prompt
+    // portion; cache_read/cache_creation are billed at different rates.
+    inputTokens: integer("input_tokens").notNull(),
+    cacheCreationTokens: integer("cache_creation_tokens").notNull().default(0),
+    cacheReadTokens: integer("cache_read_tokens").notNull().default(0),
+    outputTokens: integer("output_tokens").notNull(),
+    latencyMs: integer("latency_ms").notNull(),
+    proposals: integer("proposals").notNull().default(0),
+    ok: integer("ok", { mode: "boolean" }).notNull().default(true),
+    errorText: text("error_text"),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  },
+  (t) => ({
+    byCreatedAt: index("llm_call_by_created_at").on(t.createdAt),
+  }),
+);

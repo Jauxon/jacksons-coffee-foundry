@@ -86,7 +86,7 @@ const teamSeed = [
   },
   // Human team — operator drives every decision, no AI auto-execution
   {
-    name: "Forward Deployed Cafe",
+    name: "Operator's Cafe",
     agentStrategy: "human" as const,
     cashCents: 800_000,
     lat: 40.7580, lng: -73.9855,

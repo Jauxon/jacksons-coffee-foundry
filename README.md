@@ -1,8 +1,24 @@
-# Jackson's Coffee Foundry
+# Operator — an AI-native ops manager
 
-A simulated multi-team coffee-shop competition on Times Square — built as a recruiting demo for Palantir's Forward Deployed Engineer role. Inspired by The Palantir Coffee Cup hackathon: five storefronts, four AI strategies + one human operator, all driven by the same ontology of products, vendors, inventory, customers, and emails.
+> **CS 153 · One-Person Frontier Lab.** A solo-built demonstration that one person plus a
+> frontier model can stand in for an operations team.
 
-The simulation runs day-by-day in 6-hour segments. Customer arrivals are calibrated to Times Square pedestrian counts (~330k/day). Each tick advances the world; each agent fires Logic Functions that read the ontology and propose actions; you (or auto-approve) decide what executes.
+A small business runs on a stream of decisions a large company would hire a whole team for:
+what to restock, when, and from which vendor; how to price; how to staff. **Operator** is an
+AI agent (Claude Opus) that makes those calls against a live business model and hands each one
+to a human for approval — order placed, vendor email drafted, price changed, only on your say-so.
+
+The working prototype is a competitive simulation: five storefronts on Times Square running the
+same data model — products, vendors, inventory, customers, emails. Four shops are run
+autonomously by the agent under different strategies (stockpile, lean, premium, high-volume);
+the fifth is yours, where the agent drafts every move and you approve or reject it. The same
+engine generalizes to any storefront with a vendor catalog and customers.
+
+The simulation runs day-by-day in 6-hour segments, with customer arrivals calibrated to real
+Times Square pedestrian counts (~330k/day). Each tick advances the world; the agent reads the
+current state, reasons about tradeoffs, and proposes actions; you decide what executes. The
+[**Inference**](#inference-panel) panel exposes the cost, latency, and prompt-caching behind
+every agent decision.
 
 ## What's in here
 
@@ -47,7 +63,7 @@ The simulation runs day-by-day in 6-hour segments. Customer arrivals are calibra
 | Frugal Brews | Lean inventory | 1 staff, minimum stock; tolerates stockouts |
 | Bowery & Co. | Premium | +25% prices, premium vendors only |
 | Penny Cup | High volume | 4 staff, −15% prices, push throughput |
-| Forward Deployed Cafe | Manual | You drive every decision; AI drafts proposals + emails |
+| Operator's Cafe | Manual | You drive every decision; the agent drafts proposals + emails |
 
 ## The agent loop
 
@@ -101,6 +117,7 @@ The live demo runs on Railway with a persistent volume so state survives restart
 | `/objects` | Object Explorer — every entity type browseable with sortable columns, click any row for properties + linked objects |
 | `/ontology` | System diagram — surfaces, sources, central entity graph with action-flow callouts, sample object inspector |
 | `/agents` | Logic Functions — read-only flow editor for each agent (heuristic reorder, LLM reorder, pricing) with a live "Test run" widget |
+| `/inference` | **Inference panel** — cost, latency, and prompt-cache ledger for every Claude call (see below) |
 | `/vendors` | Vendor catalog — every offering grouped by ingredient with cheapest/fastest/most-reliable flags |
 | `/audit` | Chronological feed of every system event: proposals created, approved, POs placed, emails sent, day closes |
 | `/team/[id]` | Per-team Brew dashboard — cash, rating, inventory, storage usage, pending proposals, recent reviews |
@@ -108,6 +125,27 @@ The live demo runs on Railway with a persistent volume so state survives restart
 | `/team/[id]/menuccino` | Inventory batches + product price/availability controls |
 | `/team/[id]/mochamail` | Vendor email threads with attached purchase orders |
 | `/team/[id]/proposals` | Pending agent proposals — full LLM rationale + draft email + approve/reject |
+
+## Inference panel
+
+Every agent decision is one Claude call, and the `/inference` route is the ledger behind them.
+Each call writes a row to the `llm_call` table with **raw token counts and latency only** — every
+dollar figure is derived at read time in [`lib/llm-metrics.ts`](lib/llm-metrics.ts) from a pricing
+table, so a model-price change never requires a backfill.
+
+What it surfaces:
+
+- **Total spend** and **cost per proposal** — what the agent's reasoning actually costs.
+- **Saved by caching** — the counterfactual: the same tokens billed with *no* prompt caching,
+  minus actual cost. Cache reads bill at 10% of the input rate, so the wider the cache-read band
+  in the token-mix chart, the cheaper the run.
+- **Cache hit rate** — fraction of prompt tokens served from cache (the system prompt — persona,
+  recipes, ontology — is cached ephemeral; only the per-tick world snapshot is fresh).
+- **Latency** — avg / p50 / p95 over successful calls.
+- **Recent calls** — per-call token mix, latency, cost, no-cache counterfactual, and status.
+
+This is the "inference layer made legible" — the same cost/latency/caching tradeoffs the
+infrastructure speakers talk about, instrumented in an app I can actually point at.
 
 ## Stack
 

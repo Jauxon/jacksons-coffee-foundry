@@ -36,6 +36,13 @@
       "when": 1778228405440,
       "tag": "0004_previous_mac_gargan",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1780598530099,
+      "tag": "0005_futuristic_lord_hawal",
+      "breakpoints": true
     }
   ]
 }

@@ -19,6 +19,8 @@ export function TopChrome() {
         <span className="text-slate-300">·</span>
         <Link href="/agents" className="hover:underline">Logic Functions</Link>
         <span className="text-slate-300">·</span>
+        <Link href="/inference" className="hover:underline">Inference</Link>
+        <span className="text-slate-300">·</span>
         <Link href="/vendors" className="hover:underline">Vendors</Link>
         <span className="text-slate-300">·</span>
         <Link href="/audit" className="hover:underline">Audit</Link>
