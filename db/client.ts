@@ -21,7 +21,13 @@ function openSqlite(p: string): Database.Database {
   if (p !== ":memory:") {
     try { fs.mkdirSync(path.dirname(p), { recursive: true }); } catch {}
   }
-  return new Database(p);
+  const d = new Database(p);
+  // `next build` spins up ~11 worker processes that each import this module and
+  // race to apply pending migrations against the same volume file. Without a
+  // busy timeout, the losers throw SQLITE_BUSY and the build fails. With it,
+  // concurrent writers wait for the lock and serialize cleanly.
+  d.pragma("busy_timeout = 15000");
+  return d;
 }
 
 let _sqlite: Database.Database;
@@ -61,7 +67,17 @@ if (!isBuildPhase) {
     shopCount = { c: 0 };
   }
   if (!shopCount || shopCount.c === 0) {
-    if (isProd) seedDatabase(db, schema);
+    // Seed only if still empty after acquiring (another worker may have seeded
+    // while we waited on the busy lock). Best-effort: a seed failure must never
+    // crash the build's page-data collection.
+    if (isProd) {
+      try {
+        const fresh = sqlite.prepare("SELECT COUNT(*) AS c FROM shop").get() as { c: number } | undefined;
+        if (!fresh || fresh.c === 0) seedDatabase(db, schema);
+      } catch (e) {
+        console.warn("[db] seed warning:", (e as Error).message);
+      }
+    }
     // In dev we leave seeding to `npm run db:seed` so the developer stays in control.
   }
 }
