@@ -14,7 +14,6 @@ import { seedDatabase } from "./seed.ts";
 // (e.g. during Next.js build the volume isn't mounted yet). This is more
 // robust than relying on NEXT_PHASE which Turbopack workers don't always set.
 const isProd = process.env.NODE_ENV === "production";
-const isBuildPhase = process.env.NEXT_PHASE === "phase-production-build";
 const requestedDbPath = process.env.DB_PATH ?? (isProd ? ":memory:" : "./data.db");
 
 function openSqlite(p: string): Database.Database {
@@ -46,38 +45,41 @@ export const db = drizzle(sqlite, { schema });
 export type DB = typeof db;
 export { schema };
 
-// Bootstrap on every cold start (skip during Next.js build phase):
-//   1. Always run pending migrations — handles schema changes against an
-//      existing persistent DB on Railway.
-//   2. Only seed if the database is empty — preserves accumulated state on
-//      Railway's persistent volume across deploys.
-if (!isBuildPhase) {
+// Bootstrap — runs migrations and (in prod) seeds an empty DB.
+//
+// CRITICAL: this must NOT run at module-import time. `next build` spawns ~11
+// worker processes that each import this module to collect page data; if they
+// all run drizzle's migrator at once they deadlock on the WAL file and throw
+// SQLITE_BUSY (the migrator opens a read txn then upgrades to write, which
+// SQLite refuses across concurrent connections — busy_timeout can't help a
+// write-deadlock). So bootstrap is an explicit call, invoked once at server
+// startup from instrumentation.ts (the Next.js runtime hook), never at import.
+let _bootstrapped = false;
+export function bootstrapDb(): void {
+  if (_bootstrapped) return;
+  _bootstrapped = true;
+
   const migrationsFolder = path.resolve(process.cwd(), "db/migrations");
   try {
     migrate(db, { migrationsFolder });
   } catch (e) {
-    // Best-effort: migrate may fail on partially-initialized DBs in some envs.
     if (isProd) console.warn("[db] migrate warning:", (e as Error).message);
   }
+
   let shopCount: { c: number } | undefined;
   try {
     shopCount = sqlite.prepare("SELECT COUNT(*) AS c FROM shop").get() as any;
   } catch {
-    // shop table doesn't exist yet (migrate may have failed) — treat as empty.
     shopCount = { c: 0 };
   }
   if (!shopCount || shopCount.c === 0) {
-    // Seed only if still empty after acquiring (another worker may have seeded
-    // while we waited on the busy lock). Best-effort: a seed failure must never
-    // crash the build's page-data collection.
+    // In dev we leave seeding to `npm run db:seed` so the developer stays in control.
     if (isProd) {
       try {
-        const fresh = sqlite.prepare("SELECT COUNT(*) AS c FROM shop").get() as { c: number } | undefined;
-        if (!fresh || fresh.c === 0) seedDatabase(db, schema);
+        seedDatabase(db, schema);
       } catch (e) {
         console.warn("[db] seed warning:", (e as Error).message);
       }
     }
-    // In dev we leave seeding to `npm run db:seed` so the developer stays in control.
   }
 }
