@@ -1,0 +1,15 @@
+# Caddy reverse proxy. Caddy fetches + renews a free Let's Encrypt cert
+# automatically once a domain's DNS A record points at this droplet.
+#
+# WITH A DOMAIN (recommended) — replace operator.example.com:
+operator.example.com {
+    encode gzip
+    reverse_proxy localhost:3000
+}
+
+# IP-ONLY (no domain yet) — comment out the block above and uncomment this.
+# Serves plain HTTP on port 80 at the droplet's IP. No HTTPS.
+# :80 {
+#     encode gzip
+#     reverse_proxy localhost:3000
+# }

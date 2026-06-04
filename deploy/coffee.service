@@ -1,0 +1,20 @@
+[Unit]
+Description=Operator (Coffee Foundry) Next.js app
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/srv/coffee
+# All runtime env (ANTHROPIC_API_KEY, DB_PATH, NODE_ENV, PORT) lives here.
+# IMPORTANT: DB_PATH must be a real process env var (not a .env file) because
+# db/client.ts reads it at module load, before any dotenv call runs.
+EnvironmentFile=/etc/coffee/coffee.env
+ExecStart=/usr/bin/npm start
+Restart=always
+RestartSec=3
+# Give the Node process a clean shutdown window so SQLite can checkpoint WAL.
+KillSignal=SIGINT
+TimeoutStopSec=20
+
+[Install]
+WantedBy=multi-user.target

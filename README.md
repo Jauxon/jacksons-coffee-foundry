@@ -108,6 +108,42 @@ The live demo runs on Railway with a persistent volume so state survives restart
 
 `db/client.ts` falls back to `:memory:` if it can't open the configured file, so the app still boots if the volume isn't attached yet — useful while wiring things up.
 
+## Deploy to DigitalOcean (Droplet)
+
+A droplet keeps the SQLite-on-disk architecture intact (App Platform's filesystem is
+ephemeral, which would force a Postgres rewrite). Migrations run once at server startup via
+`instrumentation.ts`, never during build, so deploys are safe. Deploy artifacts live in
+[`deploy/`](deploy/).
+
+1. **Create** an Ubuntu 24.04 droplet (2 GB RAM — `next build` is memory-hungry; the setup
+   script also adds 2 GB swap as insurance). SSH in as root.
+2. **Provision** (installs Node 22, build tools, Caddy, clones the repo, installs the systemd
+   service):
+   ```sh
+   curl -fsSL https://raw.githubusercontent.com/Jauxon/jacksons-coffee-foundry/master/deploy/setup-droplet.sh | sudo bash
+   ```
+3. **Configure**:
+   - `sudo nano /etc/coffee/coffee.env` → set `ANTHROPIC_API_KEY`. `DB_PATH` defaults to
+     `/var/lib/coffee/coffee.db` (persists across deploys; point it at an attached Block Storage
+     volume if you want independent snapshots).
+   - `sudo nano /etc/caddy/Caddyfile` → set your domain (or switch to the `:80` IP-only block).
+4. **Build + start**:
+   ```sh
+   sudo bash /srv/coffee/deploy/deploy.sh && sudo systemctl reload caddy
+   ```
+5. **Point DNS** — an `A` record from your domain to the droplet IP. Caddy fetches HTTPS
+   automatically once DNS resolves.
+
+**Auto-deploy on push** (replicates Railway's git-push DX): the
+[`deploy-droplet.yml`](.github/workflows/deploy-droplet.yml) Action SSHes in and runs
+`deploy/deploy.sh` on every push to `master`. Add three repo secrets: `DROPLET_HOST`,
+`DROPLET_USER` (`root`), `DROPLET_SSH_KEY` (a private key whose public half is in the droplet's
+`authorized_keys`).
+
+**Migrating the live world** is optional — an empty DB self-seeds on first boot, so you can
+start fresh. To carry over Railway's state instead, copy its `coffee.db` to the droplet's
+`DB_PATH` before first start.
+
 ## Tour
 
 | Page | What's there |
