@@ -15,7 +15,16 @@ dotenv.config({ override: true, path: path.resolve(path.dirname(__filename), "..
 import { db, schema as s } from "../db/client.ts";
 import { eq, and, gt, sql } from "drizzle-orm";
 
-const client = new Anthropic();
+// Lazy client construction. The Anthropic SDK throws at construction if no API
+// key is present, and `next build` imports this module (via getLLMUsage/MODEL)
+// in a shell that has no key — the key only exists in the runtime systemd env.
+// Constructing on first use, not at import, keeps the build green without a key
+// and lets the app fall back to the heuristic agent when no key is configured.
+let _client: Anthropic | null = null;
+function getClient(): Anthropic {
+  if (!_client) _client = new Anthropic();
+  return _client;
+}
 export const MODEL = "claude-opus-4-7";
 
 // ----------------------------------------------------------------------------
@@ -403,7 +412,7 @@ export async function proposeReordersWithLLM(shopId: number): Promise<LLMAgentRe
   const t0 = Date.now();
   let response: Anthropic.Message;
   try {
-    response = await client.messages.create({
+    response = await getClient().messages.create({
       model: MODEL,
       max_tokens: 8192,
       thinking: { type: "adaptive" },
