@@ -4,6 +4,7 @@ import { desc } from "drizzle-orm";
 import { fmtUSD } from "../../lib/data.ts";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Audit" };
 
 interface AuditEvent {
   ts: number; // sim "time" — we use day*4 + segment as a sortable index

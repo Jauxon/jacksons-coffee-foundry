@@ -2,6 +2,7 @@ import { getWorkshopData } from "../../lib/workshop-aggregations.ts";
 import { WorkshopDashboard } from "../../components/WorkshopDashboard.tsx";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Workshop" };
 
 export default function Workshop() {
   const data = getWorkshopData();

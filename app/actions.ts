@@ -66,7 +66,9 @@ export async function runAllAIAgents(opts?: { useHeuristic?: boolean }): Promise
 }
 
 // Model bake-off: run the same reorder scenario through Opus / Sonnet / Haiku
-// and return a cost/latency/decisions comparison. Used by the Inference panel.
+// and return a cost/latency comparison PLUS the actual decisions each model
+// made, so the UI can show exactly where the tiers agree or diverge.
+export type BakeoffDecision = { ingredientName: string; vendorName: string; qty: number };
 export type BakeoffResult = {
   model: string;
   label: string;
@@ -77,12 +79,24 @@ export type BakeoffResult = {
   promptTokens: number;
   outputTokens: number;
   cacheReadTokens: number;
-  decisions: number;
+  decisionCount: number;
   costUsd: number;
   summary?: string;
+  decisions: BakeoffDecision[];
+};
+// Cross-model agreement matrix: one row per ingredient any model ordered, with
+// each ok model's qty/vendor (or null if it skipped). `unanimous` = ordered by
+// every ok model; `divergent` = ordered by some but not all.
+export type BakeoffComparison = {
+  models: { model: string; label: string }[];
+  rows: { ingredient: string; cells: ({ qty: number; vendor: string } | null)[] }[];
+  unanimous: number;
+  divergent: number;
 };
 
-export async function runBakeoff(shopId: number): Promise<{ ok: true; results: BakeoffResult[] } | { ok: false; error: string }> {
+export async function runBakeoff(
+  shopId: number,
+): Promise<{ ok: true; results: BakeoffResult[]; comparison: BakeoffComparison | null } | { ok: false; error: string }> {
   const shop = db.select().from(s.shop).where(eq(s.shop.id, shopId)).get();
   if (!shop) return { ok: false, error: `shop ${shopId} not found` };
   if (!process.env.ANTHROPIC_API_KEY) {
@@ -90,6 +104,10 @@ export async function runBakeoff(shopId: number): Promise<{ ok: true; results: B
   }
   try {
     const rows = await runModelBakeoff(shopId);
+
+    const ingName = new Map(db.select().from(s.ingredient).all().map((i) => [i.id, i.name]));
+    const venName = new Map(db.select().from(s.vendor).all().map((v) => [v.id, v.name]));
+
     const results: BakeoffResult[] = rows.map((r) => ({
       model: r.model,
       label: r.label,
@@ -100,7 +118,7 @@ export async function runBakeoff(shopId: number): Promise<{ ok: true; results: B
       promptTokens: r.usage.input_tokens + r.usage.cache_read_input_tokens + r.usage.cache_creation_input_tokens,
       outputTokens: r.usage.output_tokens,
       cacheReadTokens: r.usage.cache_read_input_tokens,
-      decisions: r.decisions,
+      decisionCount: r.decisionCount,
       costUsd: computeCostUsd(r.model, {
         inputTokens: r.usage.input_tokens,
         cacheCreationTokens: r.usage.cache_creation_input_tokens,
@@ -108,9 +126,43 @@ export async function runBakeoff(shopId: number): Promise<{ ok: true; results: B
         outputTokens: r.usage.output_tokens,
       }),
       summary: r.summary,
+      decisions: r.decisionList.map((d) => ({
+        ingredientName: (ingName.get(d.ingredient_id) ?? `#${d.ingredient_id}`).replace(/_/g, " "),
+        vendorName: venName.get(d.vendor_id) ?? `#${d.vendor_id}`,
+        qty: d.qty,
+      })),
     }));
+
+    // Build the agreement matrix over ok models only.
+    const okRows = rows.filter((r) => r.ok);
+    let comparison: BakeoffComparison | null = null;
+    if (okRows.length >= 2) {
+      const perModel = okRows.map((r) => {
+        const map = new Map<number, { qty: number; vendor: string }>();
+        for (const d of r.decisionList) {
+          const prev = map.get(d.ingredient_id);
+          map.set(d.ingredient_id, { qty: (prev?.qty ?? 0) + d.qty, vendor: venName.get(d.vendor_id) ?? `#${d.vendor_id}` });
+        }
+        return map;
+      });
+      const unionIds = Array.from(new Set(okRows.flatMap((r) => r.decisionList.map((d) => d.ingredient_id))));
+      const rowsOut = unionIds
+        .map((id) => ({
+          ingredient: (ingName.get(id) ?? `#${id}`).replace(/_/g, " "),
+          cells: perModel.map((mp) => mp.get(id) ?? null),
+        }))
+        .sort((a, b) => a.ingredient.localeCompare(b.ingredient));
+      const unanimous = rowsOut.filter((row) => row.cells.every((c) => c !== null)).length;
+      comparison = {
+        models: okRows.map((r) => ({ model: r.model, label: r.label })),
+        rows: rowsOut,
+        unanimous,
+        divergent: rowsOut.length - unanimous,
+      };
+    }
+
     revalidatePath("/inference");
-    return { ok: true, results };
+    return { ok: true, results, comparison };
   } catch (e) {
     console.error("[runBakeoff]", e);
     return { ok: false, error: (e as Error).message };

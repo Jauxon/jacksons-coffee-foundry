@@ -536,7 +536,9 @@ export interface BakeoffRow {
   error?: string;
   latencyMs: number;
   usage: { input_tokens: number; cache_creation_input_tokens: number; cache_read_input_tokens: number; output_tokens: number };
-  decisions: number;
+  decisionCount: number;
+  // The actual decisions, so the UI can show WHERE models agree/diverge.
+  decisionList: { ingredient_id: number; vendor_id: number; qty: number }[];
   summary?: string;
 }
 
@@ -551,7 +553,7 @@ export async function runModelBakeoff(shopId: number): Promise<BakeoffRow[]> {
 
   for (const m of BAKEOFF_MODELS) {
     if (_llmCallsUsed >= LLM_CALL_BUDGET) {
-      results.push({ model: m.id, label: m.label, tier: m.tier, ok: false, error: "instance LLM budget exhausted", latencyMs: 0, usage: zero, decisions: 0 });
+      results.push({ model: m.id, label: m.label, tier: m.tier, ok: false, error: "instance LLM budget exhausted", latencyMs: 0, usage: zero, decisionCount: 0, decisionList: [] });
       continue;
     }
     _llmCallsUsed++;
@@ -572,14 +574,14 @@ export async function runModelBakeoff(shopId: number): Promise<BakeoffRow[]> {
         output_tokens: response.usage.output_tokens,
       };
       const toolUse = response.content.find((b) => b.type === "tool_use");
-      const parsed = toolUse && toolUse.type === "tool_use" ? (toolUse.input as { summary?: string; decisions?: unknown[] }) : null;
-      const decisions = parsed?.decisions?.length ?? 0;
-      recordLLMCall(shopId, `bakeoff:${effectiveStrategy}`, snapshot, { latencyMs, usage, proposals: decisions, ok: true }, { model: m.id, agentName: "bakeoff" });
-      results.push({ model: m.id, label: m.label, tier: m.tier, ok: true, latencyMs, usage, decisions, summary: parsed?.summary });
+      const parsed = toolUse && toolUse.type === "tool_use" ? (toolUse.input as { summary?: string; decisions?: { ingredient_id: number; vendor_id: number; qty: number }[] }) : null;
+      const decisionList = (parsed?.decisions ?? []).map((d) => ({ ingredient_id: d.ingredient_id, vendor_id: d.vendor_id, qty: d.qty }));
+      recordLLMCall(shopId, `bakeoff:${effectiveStrategy}`, snapshot, { latencyMs, usage, proposals: decisionList.length, ok: true }, { model: m.id, agentName: "bakeoff" });
+      results.push({ model: m.id, label: m.label, tier: m.tier, ok: true, latencyMs, usage, decisionCount: decisionList.length, decisionList, summary: parsed?.summary });
     } catch (e) {
       const latencyMs = Date.now() - t0;
       recordLLMCall(shopId, `bakeoff:${effectiveStrategy}`, snapshot, { latencyMs, usage: zero, proposals: 0, ok: false, errorText: (e as Error).message }, { model: m.id, agentName: "bakeoff" });
-      results.push({ model: m.id, label: m.label, tier: m.tier, ok: false, error: (e as Error).message, latencyMs, usage: zero, decisions: 0 });
+      results.push({ model: m.id, label: m.label, tier: m.tier, ok: false, error: (e as Error).message, latencyMs, usage: zero, decisionCount: 0, decisionList: [] });
     }
   }
   return results;

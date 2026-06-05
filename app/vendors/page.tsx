@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getVendorCatalog, fmtUSD } from "../../lib/data.ts";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Vendors" };
 
 export default function Vendors() {
   const catalog = getVendorCatalog();

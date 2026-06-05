@@ -5,6 +5,7 @@ import { getAllShops } from "../../lib/data.ts";
 import { Bakeoff } from "../../components/Bakeoff.tsx";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Inference" };
 
 const usd = (n: number) => `$${n.toFixed(4)}`;
 const usd2 = (n: number) => `$${n.toFixed(2)}`;

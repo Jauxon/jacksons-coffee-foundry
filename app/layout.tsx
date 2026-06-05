@@ -10,9 +10,28 @@ import { WelcomeModal } from "../components/WelcomeModal.tsx";
 // to keep instances warm longer.
 export const runtime = "nodejs";
 
+// metadataBase makes the auto-generated OG/Twitter image URLs absolute so
+// scrapers (iMessage, Slack, LinkedIn, X) can fetch them. Set SITE_URL in the
+// runtime env to your public URL (e.g. https://operator.example.com).
 export const metadata = {
-  title: "Operator — AI-native ops manager",
+  metadataBase: process.env.SITE_URL ? new URL(process.env.SITE_URL) : new URL("http://localhost:3000"),
+  title: {
+    default: "Operator — AI-native ops manager",
+    template: "%s · Operator",
+  },
   description: "An AI agent that runs a small business and hands every decision to a human for approval. Five competing storefronts on Times Square.",
+  applicationName: "Operator",
+  openGraph: {
+    title: "Operator — an AI-native ops manager",
+    description: "A Claude agent runs a business and hands every decision to a human for approval. Five storefronts compete on Times Square.",
+    siteName: "Operator",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Operator — an AI-native ops manager",
+    description: "A Claude agent runs a business; a human approves every decision. Five storefronts compete on Times Square.",
+  },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

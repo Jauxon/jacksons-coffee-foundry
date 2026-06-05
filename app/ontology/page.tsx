@@ -4,6 +4,7 @@ import { sql, desc, eq } from "drizzle-orm";
 import { fmtUSD, STRATEGY_META } from "../../lib/data.ts";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Ontology" };
 
 // ---------- Live counts ----------
 function liveCounts() {
