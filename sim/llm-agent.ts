@@ -55,12 +55,13 @@ function recordLLMCall(
     ok: boolean;
     errorText?: string;
   },
+  opts?: { model?: string; agentName?: string },
 ): void {
   try {
     db.insert(s.llmCall).values({
       shopId,
-      agentName: "reorder-llm",
-      model: MODEL,
+      agentName: opts?.agentName ?? "reorder-llm",
+      model: opts?.model ?? MODEL,
       strategy,
       day: snap.current_day,
       segment: snap.segment,
@@ -511,4 +512,75 @@ export async function proposeReordersWithLLM(shopId: number): Promise<LLMAgentRe
       output_tokens: usage.output_tokens,
     },
   };
+}
+
+// ----------------------------------------------------------------------------
+// Model bake-off — run the SAME reorder scenario through three Claude tiers and
+// compare cost / latency / decisions. Standardized request (tools + cache, no
+// extended thinking) so the comparison is apples-to-apples across tiers.
+// Does NOT persist proposals — it's a measurement, not a real run. Each call
+// still counts against the per-instance budget and is recorded to llm_call
+// (agent="bakeoff") so it shows up in the ledger + per-model breakdown.
+// ----------------------------------------------------------------------------
+export const BAKEOFF_MODELS: { id: string; label: string; tier: string }[] = [
+  { id: "claude-opus-4-7",   label: "Opus 4.7",   tier: "Frontier reasoning" },
+  { id: "claude-sonnet-4-6", label: "Sonnet 4.6", tier: "Balanced" },
+  { id: "claude-haiku-4-5",  label: "Haiku 4.5",  tier: "Fast & cheap" },
+];
+
+export interface BakeoffRow {
+  model: string;
+  label: string;
+  tier: string;
+  ok: boolean;
+  error?: string;
+  latencyMs: number;
+  usage: { input_tokens: number; cache_creation_input_tokens: number; cache_read_input_tokens: number; output_tokens: number };
+  decisions: number;
+  summary?: string;
+}
+
+export async function runModelBakeoff(shopId: number): Promise<BakeoffRow[]> {
+  const { snapshot, agentStrategy } = gatherSnapshot(shopId);
+  const effectiveStrategy = agentStrategy === "human" ? "premium_pricer" : agentStrategy;
+  const systemPrompt = buildSystemPrompt(shopId, effectiveStrategy, snapshot.team_name);
+  const userText = `Current world snapshot (JSON):\n\`\`\`json\n${JSON.stringify(snapshot, null, 2)}\n\`\`\`\n\nDecide on reorders now. Call submit_reorder_proposals exactly once.`;
+
+  const zero = { input_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0, output_tokens: 0 };
+  const results: BakeoffRow[] = [];
+
+  for (const m of BAKEOFF_MODELS) {
+    if (_llmCallsUsed >= LLM_CALL_BUDGET) {
+      results.push({ model: m.id, label: m.label, tier: m.tier, ok: false, error: "instance LLM budget exhausted", latencyMs: 0, usage: zero, decisions: 0 });
+      continue;
+    }
+    _llmCallsUsed++;
+    const t0 = Date.now();
+    try {
+      const response = await getClient().messages.create({
+        model: m.id,
+        max_tokens: 4096,
+        tools: [REORDER_TOOL],
+        system: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }],
+        messages: [{ role: "user", content: [{ type: "text", text: userText }] }],
+      });
+      const latencyMs = Date.now() - t0;
+      const usage = {
+        input_tokens: response.usage.input_tokens,
+        cache_creation_input_tokens: response.usage.cache_creation_input_tokens ?? 0,
+        cache_read_input_tokens: response.usage.cache_read_input_tokens ?? 0,
+        output_tokens: response.usage.output_tokens,
+      };
+      const toolUse = response.content.find((b) => b.type === "tool_use");
+      const parsed = toolUse && toolUse.type === "tool_use" ? (toolUse.input as { summary?: string; decisions?: unknown[] }) : null;
+      const decisions = parsed?.decisions?.length ?? 0;
+      recordLLMCall(shopId, `bakeoff:${effectiveStrategy}`, snapshot, { latencyMs, usage, proposals: decisions, ok: true }, { model: m.id, agentName: "bakeoff" });
+      results.push({ model: m.id, label: m.label, tier: m.tier, ok: true, latencyMs, usage, decisions, summary: parsed?.summary });
+    } catch (e) {
+      const latencyMs = Date.now() - t0;
+      recordLLMCall(shopId, `bakeoff:${effectiveStrategy}`, snapshot, { latencyMs, usage: zero, proposals: 0, ok: false, errorText: (e as Error).message }, { model: m.id, agentName: "bakeoff" });
+      results.push({ model: m.id, label: m.label, tier: m.tier, ok: false, error: (e as Error).message, latencyMs, usage: zero, decisions: 0 });
+    }
+  }
+  return results;
 }

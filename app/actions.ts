@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { tick } from "../sim/tick.ts";
 import { proposeReorders, approveProposal as approveImpl } from "../sim/agent.ts";
-import { proposeReordersWithLLM } from "../sim/llm-agent.ts";
+import { proposeReordersWithLLM, runModelBakeoff } from "../sim/llm-agent.ts";
+import { computeCostUsd } from "../lib/llm-metrics.ts";
 import { db, schema as s } from "../db/client.ts";
 import { eq, sql } from "drizzle-orm";
 
@@ -62,6 +63,58 @@ export async function runAllAIAgents(opts?: { useHeuristic?: boolean }): Promise
   }
   revalidatePath("/", "layout");
   return firstError ? { ok: false, error: firstError } : { ok: true };
+}
+
+// Model bake-off: run the same reorder scenario through Opus / Sonnet / Haiku
+// and return a cost/latency/decisions comparison. Used by the Inference panel.
+export type BakeoffResult = {
+  model: string;
+  label: string;
+  tier: string;
+  ok: boolean;
+  error?: string;
+  latencyMs: number;
+  promptTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  decisions: number;
+  costUsd: number;
+  summary?: string;
+};
+
+export async function runBakeoff(shopId: number): Promise<{ ok: true; results: BakeoffResult[] } | { ok: false; error: string }> {
+  const shop = db.select().from(s.shop).where(eq(s.shop.id, shopId)).get();
+  if (!shop) return { ok: false, error: `shop ${shopId} not found` };
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return { ok: false, error: "No ANTHROPIC_API_KEY configured on the server — the bake-off needs the live API." };
+  }
+  try {
+    const rows = await runModelBakeoff(shopId);
+    const results: BakeoffResult[] = rows.map((r) => ({
+      model: r.model,
+      label: r.label,
+      tier: r.tier,
+      ok: r.ok,
+      error: r.error,
+      latencyMs: r.latencyMs,
+      promptTokens: r.usage.input_tokens + r.usage.cache_read_input_tokens + r.usage.cache_creation_input_tokens,
+      outputTokens: r.usage.output_tokens,
+      cacheReadTokens: r.usage.cache_read_input_tokens,
+      decisions: r.decisions,
+      costUsd: computeCostUsd(r.model, {
+        inputTokens: r.usage.input_tokens,
+        cacheCreationTokens: r.usage.cache_creation_input_tokens,
+        cacheReadTokens: r.usage.cache_read_input_tokens,
+        outputTokens: r.usage.output_tokens,
+      }),
+      summary: r.summary,
+    }));
+    revalidatePath("/inference");
+    return { ok: true, results };
+  } catch (e) {
+    console.error("[runBakeoff]", e);
+    return { ok: false, error: (e as Error).message };
+  }
 }
 
 // Dry-run an agent: returns the proposals it would generate WITHOUT persisting them.
