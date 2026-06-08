@@ -3,7 +3,7 @@
 > **CS 153 · One-Person Frontier Lab.** A solo-built demonstration that one person plus a
 > frontier model can stand in for an operations team.
 
-**Live demo:** `http://YOUR-DROPLET-IP` · **Demo video:** _(add link)_ · **Repo:** [github.com/Jauxon/jacksons-coffee-foundry](https://github.com/Jauxon/jacksons-coffee-foundry)
+**Live demo:** https://jacksons-coffee-foundry-production.up.railway.app · **Demo video:** _(add link)_ · **Repo:** [github.com/Jauxon/jacksons-coffee-foundry](https://github.com/Jauxon/jacksons-coffee-foundry)
 
 ---
 
@@ -164,28 +164,27 @@ echo 'ANTHROPIC_API_KEY=sk-ant-...' > .env
 
 CLI: `npm run tick -- 4` (advance one day), `npm run agent --all` (fire LLM agent), `npm run db:reset`.
 
-## 5. Deploy (DigitalOcean droplet)
+## 5. Deploy
 
-The live demo runs on a DigitalOcean droplet, which keeps the SQLite-on-disk architecture intact.
 Migrations run **once at server startup** via [`instrumentation.ts`](instrumentation.ts) — never during
-`next build` (which spawns ~11 workers that would otherwise deadlock on the DB). Deploy scripts live in
-[`deploy/`](deploy/).
+`next build` (which spawns ~11 workers that would otherwise deadlock on the DB). The same build runs on
+either host below.
 
+**Railway (live host).** Auto-deploys from `master`. Attach a volume at `/data` and set service
+variables: `DB_PATH=/data/coffee.db`, `ANTHROPIC_API_KEY`, `LLM_CALL_BUDGET` (raise from the default 3
+so the 3-call bake-off works), and `SITE_URL=https://<your>.up.railway.app` (makes social-preview image
+links absolute). The DB persists on the volume; an empty DB self-seeds on first boot.
+
+**DigitalOcean droplet (alternative).** A droplet keeps the SQLite-on-disk model without a managed DB.
+Scripts live in [`deploy/`](deploy/):
 1. Create an Ubuntu 24.04 droplet (2 GB+ RAM; the setup script adds swap for the build).
-2. Provision (Node 22, build tools, Caddy + auto-HTTPS, systemd service, repo clone):
-   ```sh
-   curl -fsSL https://raw.githubusercontent.com/Jauxon/jacksons-coffee-foundry/master/deploy/setup-droplet.sh | sudo bash
-   ```
-3. Set `ANTHROPIC_API_KEY` (and optionally `SITE_URL`, `LLM_CALL_BUDGET`) in `/etc/coffee/coffee.env`;
-   set your domain in `/etc/caddy/Caddyfile` (or use the `:80` IP-only block).
-4. Build + start: `sudo bash /srv/coffee/deploy/deploy.sh && sudo systemctl reload caddy`.
+2. Provision: `curl -fsSL https://raw.githubusercontent.com/Jauxon/jacksons-coffee-foundry/master/deploy/setup-droplet.sh | sudo bash`
+3. Set `ANTHROPIC_API_KEY` / `SITE_URL` / `LLM_CALL_BUDGET` in `/etc/coffee/coffee.env`; set your domain
+   in `/etc/caddy/Caddyfile`.
+4. `sudo bash /srv/coffee/deploy/deploy.sh && sudo systemctl reload caddy`.
 
-Redeploy after a push with `ssh root@<ip> "bash /srv/coffee/deploy/deploy.sh"`. The DB persists across
-deploys on the droplet's disk; an empty DB self-seeds on first boot.
-
-> Earlier iterations ran on Vercel (dropped — its ephemeral filesystem can't persist SQLite) and
-> Railway (worked, then migrated to a droplet to run on existing credits). That history is in the
-> commit log.
+> Earlier iterations ran on Vercel (dropped — its ephemeral filesystem can't persist SQLite). Both the
+> Railway and droplet paths are fully working; that history is in the commit log.
 
 ## 6. Tour
 
